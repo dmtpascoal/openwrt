@@ -1,0 +1,145 @@
+name: Build GL-MT5000
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: mt5000-custom
+          fetch-depth: 0
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            clang \
+            flex \
+            bison \
+            gawk \
+            gcc-multilib \
+            g++-multilib \
+            gettext \
+            git \
+            libncurses-dev \
+            libssl-dev \
+            python3 \
+            rsync \
+            unzip \
+            zlib1g-dev \
+            file \
+            wget \
+            subversion \
+            swig \
+            time \
+            xsltproc
+
+      - name: Verify source revision
+        run: |
+          set -eux
+
+          git rev-parse HEAD
+          git log --oneline -5
+
+          test "$(git rev-parse HEAD)" = \
+            "63f6835edc843bf23af2234f9a51ab77e703c44f"
+
+      - name: Update feeds
+        run: ./scripts/feeds update -a
+
+      - name: Install feeds
+        run: ./scripts/feeds install -a
+
+      - name: Discover MT5000 target
+        run: |
+          set -eux
+
+          echo "Searching source tree:"
+          grep -Rni \
+            'glinet_gl-mt5000\|GL-MT5000' \
+            target/linux/mediatek \
+            | head -100
+
+          echo
+          echo "Generating target information:"
+          make -s targetinfo > /tmp/targetinfo.txt
+
+          grep -in \
+            'glinet_gl-mt5000\|GL-MT5000' \
+            /tmp/targetinfo.txt \
+            || true
+
+          echo
+          echo "Relevant target information:"
+          grep -in -A20 -B10 \
+            'glinet_gl-mt5000\|GL-MT5000' \
+            /tmp/targetinfo.txt \
+            || true
+
+      - name: Configure target
+        run: |
+          set -eux
+
+          cat > .config <<'CONFIG'
+          CONFIG_TARGET_mediatek=y
+          CONFIG_TARGET_mediatek_filogic=y
+          CONFIG
+
+          make defconfig
+
+          echo
+          echo "Generated target configuration:"
+          grep '^CONFIG_TARGET' .config
+
+      - name: Verify MT5000 selection
+        run: |
+          set -eux
+
+          echo "Searching generated configuration:"
+          grep -i \
+            'mt5000\|glinet' \
+            .config \
+            || true
+
+          echo
+          echo "Searching generated target information:"
+          grep -in -A10 -B10 \
+            'glinet_gl-mt5000\|GL-MT5000' \
+            /tmp/targetinfo.txt \
+            || true
+
+      - name: Download sources
+        run: make download -j2
+
+      - name: Build
+        run: make -j2 V=s
+
+      - name: List firmware
+        run: |
+          ls -lah bin/targets/mediatek/filogic
+
+      - name: Generate checksums
+        run: |
+          cd bin/targets/mediatek/filogic
+          sha256sum * > sha256sums.txt
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: gl-mt5000-firmware
+          path: |
+            bin/targets/mediatek/filogic/*.bin
+            bin/targets/mediatek/filogic/*.itb
+            bin/targets/mediatek/filogic/*.gz
+            bin/targets/mediatek/filogic/*.img
+            bin/targets/mediatek/filogic/sha256sums.txt
+            bin/targets/mediatek/filogic/config.buildinfo
+            bin/targets/mediatek/filogic/feeds.buildinfo
+            bin/targets/mediatek/filogic/version.buildinfo
+          if-no-files-found: error
