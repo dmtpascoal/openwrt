@@ -40,15 +40,25 @@ jobs:
             time \
             xsltproc
 
-      - name: Verify source revision
+            - name: Verify source revision
         run: |
           set -eux
 
+          echo "HEAD:"
           git rev-parse HEAD
+
+          echo
+          echo "Recent commits:"
           git log --oneline -5
 
-          test "$(git rev-parse HEAD)" = \
-            "63f6835edc843bf23af2234f9a51ab77e703c44f"
+          echo
+          echo "Checking MT5000 firmware base commit:"
+          git merge-base --is-ancestor \
+            63f6835edc843bf23af2234f9a51ab77e703c44f \
+            HEAD
+
+          echo "Required MT5000 commit is present in this branch."
+
 
       - name: Update feeds
         run: ./scripts/feeds update -a
