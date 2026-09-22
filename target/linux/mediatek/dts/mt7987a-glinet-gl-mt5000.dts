@@ -136,6 +136,22 @@
 							reg = <0x4000 0x6>;
 							#nvmem-cell-cells = <1>;
 						};
+
+						ddns@10 {
+							reg = <0x4010 0x10>;
+						};
+
+						sn-bak@20 {
+							reg = <0x4020 0x10>;
+						};
+
+						sn@30 {
+							reg = <0x4030 0x10>;
+						};
+
+						country-code@88 {
+							reg = <0x4088 0x10>;
+						};
 					};
 
 				};
