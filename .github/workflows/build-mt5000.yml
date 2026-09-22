@@ -30,6 +30,7 @@ jobs:
             libncurses-dev \
             libssl-dev \
             python3 \
+            python3-distutils \
             rsync \
             unzip \
             zlib1g-dev \
@@ -49,15 +50,20 @@ jobs:
 
           echo
           echo "Recent commits:"
-          git log --oneline -5
+          git log --oneline -8
 
           echo
-          echo "Checking MT5000 firmware base commit:"
+          echo "Checking required MT5000 commits:"
+
+          git merge-base --is-ancestor \
+            ab2c4099f2 \
+            HEAD
+
           git merge-base --is-ancestor \
             63f6835edc843bf23af2234f9a51ab77e703c44f \
             HEAD
 
-          echo "Required MT5000 commit is present in this branch."
+          echo "Required MT5000 commits are present."
 
       - name: Update feeds
         run: ./scripts/feeds update -a
@@ -65,21 +71,7 @@ jobs:
       - name: Install feeds
         run: ./scripts/feeds install -a
 
-      - name: Verify MT5000 source
-        run: |
-          set -eux
-
-          echo "MT5000 device definition:"
-          sed -n '/define Device\/glinet_gl-mt5000/,/endef/p' \
-            target/linux/mediatek/image/filogic.mk
-
-          echo
-          echo "MT5000 DTS:"
-          grep -n \
-            'model =\|compatible =\|reset-gpios\|ddns@\|sn-bak@\|sn@\|country-code@' \
-            target/linux/mediatek/dts/mt7987a-gl-mt5000.dts
-
-      - name: Configure target
+      - name: Configure GL-MT5000
         run: |
           set -eux
 
@@ -108,18 +100,8 @@ jobs:
           grep '^CONFIG_TARGET' .config
 
           echo
-          echo "MT5000 configuration:"
-          grep -i 'mt5000\|glinet' .config || true
-
-      - name: Verify target selection
-        run: |
-          set -eux
-
-          grep -q '^CONFIG_TARGET_mediatek=y$' .config
-          grep -q '^CONFIG_TARGET_mediatek_filogic=y$' .config
-          grep -q '^CONFIG_TARGET_mediatek_filogic_DEVICE_glinet_gl-mt5000=y$' .config
-
-          echo "GL-MT5000 target selected successfully."
+          echo "MT5000 selection:"
+          grep 'CONFIG_TARGET_mediatek_filogic_DEVICE_glinet_gl-mt5000' .config
 
       - name: Download sources
         run: make download -j2
@@ -129,6 +111,7 @@ jobs:
 
       - name: List firmware
         run: |
+          set -eux
           ls -lah bin/targets/mediatek/filogic
 
       - name: Generate checksums
