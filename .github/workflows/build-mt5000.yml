@@ -43,16 +43,20 @@ jobs:
       - name: Verify source revision
         run: |
           set -eux
+
           echo "HEAD:"
           git rev-parse HEAD
+
           echo
           echo "Recent commits:"
           git log --oneline -5
+
           echo
           echo "Checking MT5000 firmware base commit:"
           git merge-base --is-ancestor \
             63f6835edc843bf23af2234f9a51ab77e703c44f \
             HEAD
+
           echo "Required MT5000 commit is present in this branch."
 
       - name: Update feeds
@@ -61,30 +65,19 @@ jobs:
       - name: Install feeds
         run: ./scripts/feeds install -a
 
-      - name: Discover MT5000 target
+      - name: Verify MT5000 source
         run: |
           set -eux
-          echo "Searching source tree:"
-          grep -Rni \
-            'glinet_gl-mt5000\|GL-MT5000' \
-            target/linux/mediatek \
-            | head -100
+
+          echo "MT5000 device definition:"
+          sed -n '/define Device\/glinet_gl-mt5000/,/endef/p' \
+            target/linux/mediatek/image/filogic.mk
 
           echo
-          echo "Generating target information:"
-          make -s targetinfo > /tmp/targetinfo.txt
-
-          grep -in \
-            'glinet_gl-mt5000\|GL-MT5000' \
-            /tmp/targetinfo.txt \
-            || true
-
-          echo
-          echo "Relevant target information:"
-          grep -in -A20 -B10 \
-            'glinet_gl-mt5000\|GL-MT5000' \
-            /tmp/targetinfo.txt \
-            || true
+          echo "MT5000 DTS:"
+          grep -n \
+            'model =\|compatible =\|reset-gpios\|ddns@\|sn-bak@\|sn@\|country-code@' \
+            target/linux/mediatek/dts/mt7987a-gl-mt5000.dts
 
       - name: Configure target
         run: |
@@ -93,30 +86,40 @@ jobs:
           cat > .config <<'CONFIG'
           CONFIG_TARGET_mediatek=y
           CONFIG_TARGET_mediatek_filogic=y
+          CONFIG_TARGET_mediatek_filogic_DEVICE_glinet_gl-mt5000=y
+          CONFIG_TARGET_ROOTFS_INITRAMFS=y
+          CONFIG_TARGET_ROOTFS_TARGZ=y
+          CONFIG_TARGET_IMAGES_GZIP=y
+          CONFIG_TARGET_INITRAMFS_COMPRESSION_GZIP=y
+          CONFIG_PACKAGE_kmod-fs-ext4=y
+          CONFIG_PACKAGE_kmod-fs-f2fs=y
+          CONFIG_PACKAGE_kmod-fs-vfat=y
+          CONFIG_PACKAGE_kmod-mmc=y
+          CONFIG_PACKAGE_mkf2fs=y
+          CONFIG_PACKAGE_blkid=y
+          CONFIG_PACKAGE_blockdev=y
+          CONFIG_PACKAGE_kmod-mt7987-2p5g-phy-firmware=y
           CONFIG
 
           make defconfig
 
           echo
-          echo "Generated target configuration:"
+          echo "Selected target:"
           grep '^CONFIG_TARGET' .config
 
-      - name: Verify MT5000 selection
+          echo
+          echo "MT5000 configuration:"
+          grep -i 'mt5000\|glinet' .config || true
+
+      - name: Verify target selection
         run: |
           set -eux
 
-          echo "Searching generated configuration:"
-          grep -i \
-            'mt5000\|glinet' \
-            .config \
-            || true
+          grep -q '^CONFIG_TARGET_mediatek=y$' .config
+          grep -q '^CONFIG_TARGET_mediatek_filogic=y$' .config
+          grep -q '^CONFIG_TARGET_mediatek_filogic_DEVICE_glinet_gl-mt5000=y$' .config
 
-          echo
-          echo "Searching generated target information:"
-          grep -in -A10 -B10 \
-            'glinet_gl-mt5000\|GL-MT5000' \
-            /tmp/targetinfo.txt \
-            || true
+          echo "GL-MT5000 target selected successfully."
 
       - name: Download sources
         run: make download -j2
