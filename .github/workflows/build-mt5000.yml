@@ -52,15 +52,16 @@ jobs:
           git log --oneline -8
 
           echo
-          echo "Checking required MT5000 commits:"
+          echo "Checking required MT5000 changes:"
 
+          # dmsza's review-feedback update (openwrt#24237); stable upstream SHA.
           git merge-base --is-ancestor \
-            ab2c4099f2 \
+            8461b1b79b3f251a5758cd4035d506e38a602e6b \
             HEAD
 
-          git merge-base --is-ancestor \
-            63f6835edc843bf23af2234f9a51ab77e703c44f \
-            HEAD
+          # Kyklas's factory NVMEM cells (checked by content: SHA changes on rebase).
+          grep -q 'country-code@88' \
+            target/linux/mediatek/dts/mt7987a-glinet-gl-mt5000.dts
 
           echo "Required MT5000 commits are present."
 
