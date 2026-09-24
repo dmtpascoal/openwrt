@@ -99,6 +99,10 @@ jobs:
           CONFIG_PACKAGE_blkid=y
           CONFIG_PACKAGE_blockdev=y
           CONFIG_PACKAGE_kmod-mt7987-2p5g-phy-firmware=y
+          # Kernel 6.18 made CRYPTO_LIB_CHACHA20POLY1305/CURVE25519 promptless:
+          # only in-kernel users can select them, so the out-of-tree
+          # kmod-amneziawg cannot. kmod-wireguard (CONFIG_WIREGUARD) selects both.
+          CONFIG_PACKAGE_kmod-wireguard=y
           CONFIG_PACKAGE_kmod-amneziawg=y
           CONFIG_PACKAGE_amneziawg-tools=y
           CONFIG_PACKAGE_luci=y
@@ -118,6 +122,7 @@ jobs:
           echo
           echo "AmneziaWG selection:"
           grep -x 'CONFIG_PACKAGE_kmod-amneziawg=y' .config
+          grep -x 'CONFIG_PACKAGE_kmod-wireguard=y' .config
           grep -x 'CONFIG_PACKAGE_amneziawg-tools=y' .config
 
           echo
