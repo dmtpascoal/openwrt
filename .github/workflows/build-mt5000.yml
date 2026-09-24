@@ -14,6 +14,14 @@ jobs:
           ref: mt5000-custom
           fetch-depth: 0
 
+      - name: Free disk space
+        run: |
+          # kmod-amneziawg copies the whole kernel build tree into its build dir.
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          sudo docker image prune --all --force >/dev/null 2>&1 || true
+          df -h /
+
       - name: Install build dependencies
         run: |
           sudo apt-get update
@@ -91,6 +99,8 @@ jobs:
           CONFIG_PACKAGE_blkid=y
           CONFIG_PACKAGE_blockdev=y
           CONFIG_PACKAGE_kmod-mt7987-2p5g-phy-firmware=y
+          CONFIG_PACKAGE_kmod-amneziawg=y
+          CONFIG_PACKAGE_amneziawg-tools=y
           CONFIG
 
           make defconfig
@@ -103,6 +113,11 @@ jobs:
           echo "MT5000 selection:"
           grep 'CONFIG_TARGET_mediatek_filogic_DEVICE_glinet_gl-mt5000' .config
 
+          echo
+          echo "AmneziaWG selection:"
+          grep -x 'CONFIG_PACKAGE_kmod-amneziawg=y' .config
+          grep -x 'CONFIG_PACKAGE_amneziawg-tools=y' .config
+
       - name: Download sources
         run: make download -j2
 
@@ -112,6 +127,8 @@ jobs:
       - name: List firmware
         run: |
           set -eux
+          df -h /
+          find bin -name '*amneziawg*' -print
           ls -lah bin/targets/mediatek/filogic
 
       - name: Generate checksums
@@ -134,4 +151,6 @@ jobs:
             bin/targets/mediatek/filogic/config.buildinfo
             bin/targets/mediatek/filogic/feeds.buildinfo
             bin/targets/mediatek/filogic/version.buildinfo
+            bin/targets/mediatek/filogic/packages/kmod-amneziawg*
+            bin/packages/*/amneziawg/*
           if-no-files-found: error
