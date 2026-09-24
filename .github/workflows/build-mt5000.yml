@@ -101,6 +101,8 @@ jobs:
           CONFIG_PACKAGE_kmod-mt7987-2p5g-phy-firmware=y
           CONFIG_PACKAGE_kmod-amneziawg=y
           CONFIG_PACKAGE_amneziawg-tools=y
+          CONFIG_PACKAGE_luci=y
+          CONFIG_PACKAGE_luci-proto-amneziawg=y
           CONFIG
 
           make defconfig
@@ -117,6 +119,11 @@ jobs:
           echo "AmneziaWG selection:"
           grep -x 'CONFIG_PACKAGE_kmod-amneziawg=y' .config
           grep -x 'CONFIG_PACKAGE_amneziawg-tools=y' .config
+
+          echo
+          echo "LuCI selection:"
+          grep -x 'CONFIG_PACKAGE_luci=y' .config
+          grep -x 'CONFIG_PACKAGE_luci-proto-amneziawg=y' .config
 
       - name: Download sources
         run: make download -j2
