@@ -107,6 +107,9 @@ jobs:
           CONFIG_PACKAGE_amneziawg-tools=y
           CONFIG_PACKAGE_luci=y
           CONFIG_PACKAGE_luci-proto-amneziawg=y
+          CONFIG_PACKAGE_adguardhome=y
+          CONFIG_PACKAGE_wireguard-tools=y
+          CONFIG_PACKAGE_avahi-nodbus-daemon=y
           CONFIG
 
           make defconfig
@@ -129,6 +132,12 @@ jobs:
           echo "LuCI selection:"
           grep -x 'CONFIG_PACKAGE_luci=y' .config
           grep -x 'CONFIG_PACKAGE_luci-proto-amneziawg=y' .config
+
+          echo
+          echo "Homelab packages:"
+          grep -x 'CONFIG_PACKAGE_adguardhome=y' .config
+          grep -x 'CONFIG_PACKAGE_wireguard-tools=y' .config
+          grep -x 'CONFIG_PACKAGE_avahi-nodbus-daemon=y' .config
 
       - name: Download sources
         run: make download -j2
