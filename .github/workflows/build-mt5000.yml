@@ -109,6 +109,7 @@ jobs:
           CONFIG_PACKAGE_luci-proto-amneziawg=y
           CONFIG_PACKAGE_adguardhome=y
           CONFIG_PACKAGE_wireguard-tools=y
+          CONFIG_PACKAGE_luci-proto-wireguard=y
           CONFIG_PACKAGE_avahi-nodbus-daemon=y
           CONFIG
 
@@ -137,6 +138,7 @@ jobs:
           echo "Homelab packages:"
           grep -x 'CONFIG_PACKAGE_adguardhome=y' .config
           grep -x 'CONFIG_PACKAGE_wireguard-tools=y' .config
+          grep -x 'CONFIG_PACKAGE_luci-proto-wireguard=y' .config
           grep -x 'CONFIG_PACKAGE_avahi-nodbus-daemon=y' .config
 
       - name: Download sources
