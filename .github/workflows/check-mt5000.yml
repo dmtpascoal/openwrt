@@ -40,9 +40,13 @@ jobs:
 
       - name: Verify source
         run: |
+          set -eux
           git log --oneline -3
-          test "$(git rev-parse HEAD)" = \
-            "63f6835edc843bf23af2234f9a51ab77e703c44f"
+          git merge-base --is-ancestor \
+            8461b1b79b3f251a5758cd4035d506e38a602e6b \
+            HEAD
+          grep -q 'country-code@88' \
+            target/linux/mediatek/dts/mt7987a-glinet-gl-mt5000.dts
 
       - name: Update feeds
         run: ./scripts/feeds update -a
