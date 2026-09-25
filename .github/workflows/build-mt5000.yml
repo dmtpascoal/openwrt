@@ -111,6 +111,8 @@ jobs:
           CONFIG_PACKAGE_wireguard-tools=y
           CONFIG_PACKAGE_luci-proto-wireguard=y
           CONFIG_PACKAGE_avahi-nodbus-daemon=y
+          CONFIG_PACKAGE_ddns-scripts-cloudflare=y
+          CONFIG_PACKAGE_luci-app-ddns=y
           CONFIG
 
           make defconfig
@@ -140,6 +142,8 @@ jobs:
           grep -x 'CONFIG_PACKAGE_wireguard-tools=y' .config
           grep -x 'CONFIG_PACKAGE_luci-proto-wireguard=y' .config
           grep -x 'CONFIG_PACKAGE_avahi-nodbus-daemon=y' .config
+          grep -x 'CONFIG_PACKAGE_ddns-scripts-cloudflare=y' .config
+          grep -x 'CONFIG_PACKAGE_luci-app-ddns=y' .config
 
       - name: Download sources
         run: make download -j2
