@@ -62,9 +62,9 @@ jobs:
           echo
           echo "Checking required MT5000 changes:"
 
-          # dmsza's review-feedback update (openwrt#24237); stable upstream SHA.
+          # dmsza's mtk_eth unwind fix (openwrt#24237); implies his whole rebuilt series.
           git merge-base --is-ancestor \
-            8461b1b79b3f251a5758cd4035d506e38a602e6b \
+            2087e3175c0fb391dd94c366588c3fbbcd8950a5 \
             HEAD
 
           # Kyklas's factory NVMEM cells (checked by content: SHA changes on rebase).
