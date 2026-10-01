@@ -43,7 +43,7 @@ jobs:
           set -eux
           git log --oneline -3
           git merge-base --is-ancestor \
-            8461b1b79b3f251a5758cd4035d506e38a602e6b \
+            2087e3175c0fb391dd94c366588c3fbbcd8950a5 \
             HEAD
           grep -q 'country-code@88' \
             target/linux/mediatek/dts/mt7987a-glinet-gl-mt5000.dts
