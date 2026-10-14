@@ -9,8 +9,6 @@ out-of-tree package module.
 
 Signed-off-by: GL.iNet Test Build <support@gl-inet.com>
 ---
-diff --git a/drivers/net/dsa/realtek/Kconfig b/drivers/net/dsa/realtek/Kconfig
-index d6eb671..85bd3c2 100644
 --- a/drivers/net/dsa/realtek/Kconfig
 +++ b/drivers/net/dsa/realtek/Kconfig
 @@ -43,6 +43,13 @@ config NET_DSA_REALTEK_RTL8366RB
@@ -27,8 +25,6 @@ index d6eb671..85bd3c2 100644
  config NET_DSA_REALTEK_RTL8366RB_LEDS
  	bool
  	depends on (LEDS_CLASS=y || LEDS_CLASS=NET_DSA_REALTEK_RTL8366RB)
-diff --git a/drivers/net/dsa/realtek/Makefile b/drivers/net/dsa/realtek/Makefile
-index 72bb42e..cebedfa 100644
 --- a/drivers/net/dsa/realtek/Makefile
 +++ b/drivers/net/dsa/realtek/Makefile
 @@ -21,3 +21,16 @@ rtl8365mb-objs := rtl8365mb_main.o \
@@ -48,9 +44,6 @@ index 72bb42e..cebedfa 100644
 +		rtl8366ub_mib.o \
 +		rtl8366ub_dsa.o \
 +		rtl8366ub_phy.o
-diff --git a/drivers/net/dsa/realtek/rtl8366ub_core.c b/drivers/net/dsa/realtek/rtl8366ub_core.c
-new file mode 100644
-index 0000000..2e0813f
 --- /dev/null
 +++ b/drivers/net/dsa/realtek/rtl8366ub_core.c
 @@ -0,0 +1,74 @@
@@ -128,9 +121,6 @@ index 0000000..2e0813f
 +
 +	return 0;
 +}
-diff --git a/drivers/net/dsa/realtek/rtl8366ub_cpu.c b/drivers/net/dsa/realtek/rtl8366ub_cpu.c
-new file mode 100644
-index 0000000..4261f69
 --- /dev/null
 +++ b/drivers/net/dsa/realtek/rtl8366ub_cpu.c
 @@ -0,0 +1,290 @@
@@ -424,9 +414,6 @@ index 0000000..4261f69
 +
 +	return rtl8366ub_reg_write(priv, RTL8366UB_CPU_TAG_CTRL_REG, ctrl);
 +}
-diff --git a/drivers/net/dsa/realtek/rtl8366ub_dsa.c b/drivers/net/dsa/realtek/rtl8366ub_dsa.c
-new file mode 100644
-index 0000000..c4752f2
 --- /dev/null
 +++ b/drivers/net/dsa/realtek/rtl8366ub_dsa.c
 @@ -0,0 +1,1002 @@
@@ -1432,9 +1419,6 @@ index 0000000..c4752f2
 +MODULE_AUTHOR("Jianhui Zhao <jianhui.zhao@gl-inet.com>");
 +MODULE_DESCRIPTION("Realtek RTL8366UB Ethernet switch DSA driver");
 +MODULE_LICENSE("GPL");
-diff --git a/drivers/net/dsa/realtek/rtl8366ub_init.c b/drivers/net/dsa/realtek/rtl8366ub_init.c
-new file mode 100644
-index 0000000..d109706
 --- /dev/null
 +++ b/drivers/net/dsa/realtek/rtl8366ub_init.c
 @@ -0,0 +1,357 @@
@@ -1795,9 +1779,6 @@ index 0000000..d109706
 +		return ret;
 +	return rtl8366ub_init_patch_request(priv, false);
 +}
-diff --git a/drivers/net/dsa/realtek/rtl8366ub_l2.c b/drivers/net/dsa/realtek/rtl8366ub_l2.c
-new file mode 100644
-index 0000000..784bd00
 --- /dev/null
 +++ b/drivers/net/dsa/realtek/rtl8366ub_l2.c
 @@ -0,0 +1,315 @@
@@ -2116,9 +2097,6 @@ index 0000000..784bd00
 +
 +	return rtl8366ub_l2_commit(priv, mac, vid, data, members != 0);
 +}
-diff --git a/drivers/net/dsa/realtek/rtl8366ub_mib.c b/drivers/net/dsa/realtek/rtl8366ub_mib.c
-new file mode 100644
-index 0000000..f286cbd
 --- /dev/null
 +++ b/drivers/net/dsa/realtek/rtl8366ub_mib.c
 @@ -0,0 +1,117 @@
@@ -2239,9 +2217,6 @@ index 0000000..f286cbd
 +	for (i = 0; i < ARRAY_SIZE(rtl8366ub_mibs); i++)
 +		rtl8366ub_mib_read(priv, port, &rtl8366ub_mibs[i], &data[i]);
 +}
-diff --git a/drivers/net/dsa/realtek/rtl8366ub_phy.c b/drivers/net/dsa/realtek/rtl8366ub_phy.c
-new file mode 100644
-index 0000000..73a46a8
 --- /dev/null
 +++ b/drivers/net/dsa/realtek/rtl8366ub_phy.c
 @@ -0,0 +1,229 @@
@@ -2474,9 +2449,6 @@ index 0000000..73a46a8
 +{
 +	phy_drivers_unregister(&rtl8366ub_phy_driver, 1);
 +}
-diff --git a/drivers/net/dsa/realtek/rtl8366ub_port.c b/drivers/net/dsa/realtek/rtl8366ub_port.c
-new file mode 100644
-index 0000000..866dca9
 --- /dev/null
 +++ b/drivers/net/dsa/realtek/rtl8366ub_port.c
 @@ -0,0 +1,252 @@
@@ -2732,9 +2704,6 @@ index 0000000..866dca9
 +
 +	return 0;
 +}
-diff --git a/drivers/net/dsa/realtek/rtl8366ub_reg.c b/drivers/net/dsa/realtek/rtl8366ub_reg.c
-new file mode 100644
-index 0000000..14709d8
 --- /dev/null
 +++ b/drivers/net/dsa/realtek/rtl8366ub_reg.c
 @@ -0,0 +1,79 @@
@@ -2817,9 +2786,6 @@ index 0000000..14709d8
 +	mutex_unlock(&priv->bus->mdio_lock);
 +	return ret < 0 ? ret : 0;
 +}
-diff --git a/drivers/net/dsa/realtek/rtl8366ub_switch.c b/drivers/net/dsa/realtek/rtl8366ub_switch.c
-new file mode 100644
-index 0000000..bf40d83
 --- /dev/null
 +++ b/drivers/net/dsa/realtek/rtl8366ub_switch.c
 @@ -0,0 +1,433 @@
@@ -3256,9 +3222,6 @@ index 0000000..bf40d83
 +
 +	return rtl8366ub_vlan_disable_leaky(priv);
 +}
-diff --git a/drivers/net/dsa/realtek/rtl8366ub_table.c b/drivers/net/dsa/realtek/rtl8366ub_table.c
-new file mode 100644
-index 0000000..21ef14a
 --- /dev/null
 +++ b/drivers/net/dsa/realtek/rtl8366ub_table.c
 @@ -0,0 +1,116 @@
@@ -3378,9 +3341,6 @@ index 0000000..21ef14a
 +	mutex_unlock(&priv->table_mutex);
 +	return ret;
 +}
-diff --git a/drivers/net/dsa/realtek/rtl8366ub_dsa.h b/drivers/net/dsa/realtek/rtl8366ub_dsa.h
-new file mode 100644
-index 0000000..bb7de67
 --- /dev/null
 +++ b/drivers/net/dsa/realtek/rtl8366ub_dsa.h
 @@ -0,0 +1,114 @@
@@ -3498,9 +3458,6 @@ index 0000000..bb7de67
 +void rtl8366ub_phy_driver_unregister(void);
 +
 +#endif
-diff --git a/drivers/net/dsa/realtek/rtl8366ub_init.h b/drivers/net/dsa/realtek/rtl8366ub_init.h
-new file mode 100644
-index 0000000..206eac0
 --- /dev/null
 +++ b/drivers/net/dsa/realtek/rtl8366ub_init.h
 @@ -0,0 +1,9 @@
@@ -3513,9 +3470,6 @@ index 0000000..206eac0
 +int rtl8366ub_hw_init(struct rtl8366ub_priv *priv);
 +
 +#endif
-diff --git a/drivers/net/dsa/realtek/rtl8366ub_l2.h b/drivers/net/dsa/realtek/rtl8366ub_l2.h
-new file mode 100644
-index 0000000..b32b8ae
 --- /dev/null
 +++ b/drivers/net/dsa/realtek/rtl8366ub_l2.h
 @@ -0,0 +1,35 @@
@@ -3554,9 +3508,6 @@ index 0000000..b32b8ae
 +					  int port);
 +
 +#endif
-diff --git a/drivers/net/dsa/realtek/rtl8366ub_mib.h b/drivers/net/dsa/realtek/rtl8366ub_mib.h
-new file mode 100644
-index 0000000..8cf7f72
 --- /dev/null
 +++ b/drivers/net/dsa/realtek/rtl8366ub_mib.h
 @@ -0,0 +1,13 @@
@@ -3573,9 +3524,6 @@ index 0000000..8cf7f72
 +void rtl8366ub_mib_get_stats(struct rtl8366ub_priv *priv, int port, u64 *data);
 +
 +#endif
-diff --git a/drivers/net/dsa/realtek/rtl8366ub_reg.h b/drivers/net/dsa/realtek/rtl8366ub_reg.h
-new file mode 100644
-index 0000000..33e33ff
 --- /dev/null
 +++ b/drivers/net/dsa/realtek/rtl8366ub_reg.h
 @@ -0,0 +1,12 @@
@@ -3591,9 +3539,6 @@ index 0000000..33e33ff
 +int rtl8366ub_reg_write(struct rtl8366ub_priv *priv, u16 reg, u16 val);
 +
 +#endif
-diff --git a/drivers/net/dsa/realtek/rtl8366ub_table.h b/drivers/net/dsa/realtek/rtl8366ub_table.h
-new file mode 100644
-index 0000000..0a4640c
 --- /dev/null
 +++ b/drivers/net/dsa/realtek/rtl8366ub_table.h
 @@ -0,0 +1,30 @@

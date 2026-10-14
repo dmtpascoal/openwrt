@@ -15,8 +15,6 @@ passed through as before.
 
 Not yet verified on hardware.
 ---
-diff --git a/net/dsa/tag_rtl8366ub_8021q.c b/net/dsa/tag_rtl8366ub_8021q.c
-index 3be77d6..9be4968 100644
 --- a/net/dsa/tag_rtl8366ub_8021q.c
 +++ b/net/dsa/tag_rtl8366ub_8021q.c
 @@ -8,6 +8,8 @@
@@ -28,18 +26,17 @@ index 3be77d6..9be4968 100644
  
  #include "tag.h"
  #include "tag_8021q.h"
-@@ -31,11 +33,32 @@ rtl8366ub_8021q_xmit(struct sk_buff *skb, struct net_device *netdev)
+@@ -31,11 +33,32 @@ rtl8366ub_8021q_xmit(struct sk_buff *skb
  	 * a reliable indication that the bridge management VID is required.
  	 */
  	if (br) {
 -		if (br_vlan_enabled(br))
 -			return skb;
--
--		tx_vid = dsa_tag_8021q_bridge_vid(
--			dsa_port_bridge_num_get(dp));
 +		if (br_vlan_enabled(br)) {
 +			u16 pvid = 0;
-+
+ 
+-		tx_vid = dsa_tag_8021q_bridge_vid(
+-			dsa_port_bridge_num_get(dp));
 +			/* With TX forwarding offload the bridge keeps the
 +			 * frame's VLAN and the switch forwards and untags it.
 +			 * Frames sent on the port without a tag (link-local

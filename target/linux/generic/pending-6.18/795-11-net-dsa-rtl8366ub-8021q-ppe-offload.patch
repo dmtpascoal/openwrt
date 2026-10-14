@@ -15,8 +15,6 @@ standalone or VLAN-unaware bridge management VID on egress.
 
 Signed-off-by: GL.iNet Test Build <support@gl-inet.com>
 ---
-diff --git a/include/net/dsa.h b/include/net/dsa.h
-index e667b46..5a470b0 100644
 --- a/include/net/dsa.h
 +++ b/include/net/dsa.h
 @@ -57,6 +57,10 @@ struct tc_action;
@@ -30,7 +28,7 @@ index e667b46..5a470b0 100644
  
  enum dsa_tag_protocol {
  	DSA_TAG_PROTO_NONE		= DSA_TAG_PROTO_NONE_VALUE,
-@@ -91,6 +92,7 @@ enum dsa_tag_protocol {
+@@ -91,6 +95,7 @@ enum dsa_tag_protocol {
  	DSA_TAG_PROTO_VSC73XX_8021Q	= DSA_TAG_PROTO_VSC73XX_8021Q_VALUE,
  	DSA_TAG_PROTO_MXL862		= DSA_TAG_PROTO_MXL862_VALUE,
  	DSA_TAG_PROTO_MXL862_8021Q	= DSA_TAG_PROTO_MXL862_8021Q_VALUE,
@@ -38,8 +36,6 @@ index e667b46..5a470b0 100644
  };
  
  struct dsa_switch;
-diff --git a/net/dsa/Kconfig b/net/dsa/Kconfig
-index 2a37bee..df278e0 100644
 --- a/net/dsa/Kconfig
 +++ b/net/dsa/Kconfig
 @@ -118,6 +118,14 @@ config NET_DSA_TAG_MXL_862XX_8021Q
@@ -57,11 +53,9 @@ index 2a37bee..df278e0 100644
  config NET_DSA_TAG_KSZ
  	tristate "Tag driver for Microchip 8795/937x/9477/9893 families of switches"
  	help
-diff --git a/net/dsa/Makefile b/net/dsa/Makefile
-index ad86a82..8c15317 100644
 --- a/net/dsa/Makefile
 +++ b/net/dsa/Makefile
-@@ -36,6 +36,7 @@ obj-$(CONFIG_NET_DSA_TAG_OCELOT_8021Q) += tag_ocelot_8021q.o
+@@ -36,6 +36,7 @@ obj-$(CONFIG_NET_DSA_TAG_OCELOT_8021Q) +
  obj-$(CONFIG_NET_DSA_TAG_QCA) += tag_qca.o
  obj-$(CONFIG_NET_DSA_TAG_RTL4_A) += tag_rtl4_a.o
  obj-$(CONFIG_NET_DSA_TAG_RTL8_4) += tag_rtl8_4.o
@@ -69,10 +63,9 @@ index ad86a82..8c15317 100644
  obj-$(CONFIG_NET_DSA_TAG_RZN1_A5PSW) += tag_rzn1_a5psw.o
  obj-$(CONFIG_NET_DSA_TAG_SJA1105) += tag_sja1105.o
  obj-$(CONFIG_NET_DSA_TAG_TRAILER) += tag_trailer.o
-diff --git a/drivers/net/ethernet/mediatek/mtk_eth_soc.c b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.c
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
-@@ -1593,7 +1593,8 @@ static void mtk_tx_set_dma_desc_v2(struct mtk_tx_dma_v2 *desc,
+@@ -1582,7 +1582,8 @@ static void mtk_tx_set_dma_desc_v2(struc
  		/* tx checksum offload */
  		if (info->csum)
  			data |= TX_DMA_CHKSUM_V2;
@@ -82,7 +75,8 @@ diff --git a/drivers/net/ethernet/mediatek/mtk_eth_soc.c b/drivers/net/ethernet/
  			data |= TX_DMA_SPTAG_V3;
  	}
  	WRITE_ONCE(desc->txd5, data);
-@@ -3767,13 +3768,14 @@ static void mtk_gdm_config(struct mtk_eth *eth, u32 id, u32 config)
+@@ -3749,14 +3750,15 @@ static void mtk_gdm_config(struct mtk_et
+ 	val = mtk_r32(eth, MTK_GDMA_FWD_CFG(id));
  
  	/* default setup the forward port to send frame to PDMA */
 -	val &= ~0xffff;
@@ -99,11 +93,9 @@ diff --git a/drivers/net/ethernet/mediatek/mtk_eth_soc.c b/drivers/net/ethernet/
  		val |= MTK_GDMA_SPECIAL_TAG;
  
  	mtk_w32(eth, val, MTK_GDMA_FWD_CFG(id));
-diff --git a/drivers/net/ethernet/mediatek/mtk_ppe_offload.c b/drivers/net/ethernet/mediatek/mtk_ppe_offload.c
-index df53e16..36944d2 100644
 --- a/drivers/net/ethernet/mediatek/mtk_ppe_offload.c
 +++ b/drivers/net/ethernet/mediatek/mtk_ppe_offload.c
-@@ -203,6 +203,17 @@ mtk_flow_get_dsa_port(struct net_device **dev, u16 *push_vid)
+@@ -203,6 +203,17 @@ mtk_flow_get_dsa_port(struct net_device
  		if (push_vid)
  			*push_vid = dsa_tag_8021q_standalone_vid(dp);
  		break;
@@ -121,8 +113,7 @@ index df53e16..36944d2 100644
  	default:
  		return -ENODEV;
  	}
-@@ -222,7 +233,8 @@ mtk_flow_set_output_device(struct mtk_eth *eth, struct mtk_foe_entry *foe,
- {
+@@ -223,6 +234,7 @@ mtk_flow_set_output_device(struct mtk_et
  	struct mtk_wdma_info info = {};
  	struct mtk_mac *mac;
  	int pse_port, dsa_port, queue;
@@ -130,7 +121,9 @@ index df53e16..36944d2 100644
  	u16 push_vid = 0;
  
  	if (mtk_flow_get_wdma_info(dev, dest_mac, &info) == 0) {
-@@ -263,8 +275,11 @@ mtk_flow_set_output_device(struct mtk_eth *eth, struct mtk_foe_entry *foe,
+@@ -261,10 +273,13 @@ mtk_flow_set_output_device(struct mtk_et
+ 		return -EOPNOTSUPP;
+ 
  	if (dsa_port >= 0) {
 -		if (push_vid)
 -			mtk_foe_entry_set_vlan(eth, foe, push_vid);
@@ -145,10 +138,10 @@ index df53e16..36944d2 100644
  	}
  
  	if (dsa_port >= 0 && dsa_port < MTK_DSA_USER_PORT_MAX) {
-diff --git a/net/dsa/tag_8021q.c b/net/dsa/tag_8021q.c
 --- a/net/dsa/tag_8021q.c
 +++ b/net/dsa/tag_8021q.c
-@@ -218,6 +218,6 @@ int dsa_switch_tag_8021q_vlan_add(struct dsa_switch *ds,
+@@ -217,7 +217,7 @@ dsa_port_tag_8021q_vlan_match(struct dsa
+ int dsa_switch_tag_8021q_vlan_add(struct dsa_switch *ds,
  				  struct dsa_notifier_tag_8021q_vlan_info *info)
  {
 -	struct dsa_port *dp;
@@ -156,7 +149,7 @@ diff --git a/net/dsa/tag_8021q.c b/net/dsa/tag_8021q.c
  	int err;
  
  	/* Since we use dsa_broadcast(), there might be other switches in other
-@@ -239,11 +239,22 @@ int dsa_switch_tag_8021q_vlan_add(struct dsa_switch *ds,
+@@ -239,11 +239,22 @@ int dsa_switch_tag_8021q_vlan_add(struct
  			err = dsa_port_do_tag_8021q_vlan_add(dp, info->vid,
  							     flags);
  			if (err)
@@ -180,7 +173,7 @@ diff --git a/net/dsa/tag_8021q.c b/net/dsa/tag_8021q.c
  }
  
  int dsa_switch_tag_8021q_vlan_del(struct dsa_switch *ds,
-@@ -398,7 +409,7 @@ static int dsa_tag_8021q_setup(struct dsa_switch *ds)
+@@ -398,11 +409,17 @@ static int dsa_tag_8021q_setup(struct ds
  			dev_err(ds->dev,
  				"Failed to setup VLAN tagging for port %d: %pe\n",
  				port, ERR_PTR(err));
@@ -189,7 +182,6 @@ diff --git a/net/dsa/tag_8021q.c b/net/dsa/tag_8021q.c
  		}
  	}
  
-@@ -405,4 +416,10 @@ static int dsa_tag_8021q_setup(struct dsa_switch *ds)
  	return 0;
 +
 +teardown:
@@ -200,7 +192,7 @@ diff --git a/net/dsa/tag_8021q.c b/net/dsa/tag_8021q.c
  }
  
  static void dsa_tag_8021q_teardown(struct dsa_switch *ds)
-@@ -438,6 +455,7 @@ int dsa_tag_8021q_register(struct dsa_switch *ds, __be16 proto)
+@@ -438,6 +455,7 @@ int dsa_tag_8021q_register(struct dsa_sw
  	return 0;
  
  err_free:
@@ -208,9 +200,6 @@ diff --git a/net/dsa/tag_8021q.c b/net/dsa/tag_8021q.c
  	kfree(ctx);
  	return err;
  }
-diff --git a/net/dsa/tag_rtl8366ub_8021q.c b/net/dsa/tag_rtl8366ub_8021q.c
-new file mode 100644
-index 0000000..ae1d43a
 --- /dev/null
 +++ b/net/dsa/tag_rtl8366ub_8021q.c
 @@ -0,0 +1,95 @@
@@ -309,5 +298,3 @@ index 0000000..ae1d43a
 +			    RTL8366UB_8021Q_NAME);
 +
 +module_dsa_tag_driver(rtl8366ub_8021q_netdev_ops);
--- 
-2.51.0

@@ -18,8 +18,6 @@ Subject: [PATCH] net: dsa: rtl8366ub: VLAN configuration and FDB fixes
 
 Not yet verified on hardware.
 ---
-diff --git a/drivers/net/dsa/realtek/rtl8366ub_dsa.c b/drivers/net/dsa/realtek/rtl8366ub_dsa.c
-index 29c4cc4..d3b1394 100644
 --- a/drivers/net/dsa/realtek/rtl8366ub_dsa.c
 +++ b/drivers/net/dsa/realtek/rtl8366ub_dsa.c
 @@ -9,6 +9,8 @@
@@ -31,7 +29,7 @@ index 29c4cc4..d3b1394 100644
  #include <linux/etherdevice.h>
  #include <linux/of_net.h>
  #include <linux/bitops.h>
-@@ -322,6 +324,10 @@ static int rtl8366ub_sw_setup(struct dsa_switch *ds)
+@@ -322,6 +324,10 @@ static int rtl8366ub_sw_setup(struct dsa
  
  	ds->max_num_bridges = DSA_TAG_8021Q_MAX_NUM_BRIDGES;
  	ds->fdb_isolation = true;
@@ -42,7 +40,7 @@ index 29c4cc4..d3b1394 100644
  	rtnl_lock();
  	ret = dsa_tag_8021q_register(ds, htons(ETH_P_8021Q));
  	rtnl_unlock();
-@@ -422,6 +428,7 @@ static void rtl8366ub_sw_stp_state_set(struct dsa_switch *ds, int port, u8 state
+@@ -422,6 +428,7 @@ static void rtl8366ub_sw_stp_state_set(s
  {
  	struct rtl8366ub_priv *priv = ds->priv;
  	u8 stp_state;
@@ -50,7 +48,7 @@ index 29c4cc4..d3b1394 100644
  
  	if (dsa_is_unused_port(ds, port))
  		return;
-@@ -444,8 +451,11 @@ static void rtl8366ub_sw_stp_state_set(struct dsa_switch *ds, int port, u8 state
+@@ -444,8 +451,11 @@ static void rtl8366ub_sw_stp_state_set(s
  	}
  
  	mutex_lock(&priv->reg_mutex);
@@ -63,7 +61,7 @@ index 29c4cc4..d3b1394 100644
  }
  
  static int rtl8366ub_sw_port_bridge_join(struct dsa_switch *ds, int port,
-@@ -586,7 +596,7 @@ static int rtl8366ub_sw_port_fdb_del(struct dsa_switch *ds, int port,
+@@ -586,7 +596,7 @@ static int rtl8366ub_sw_port_fdb_del(str
  	vid = rtl8366ub_sw_l2_vid(vid, db);
  
  	mutex_lock(&priv->reg_mutex);
@@ -72,7 +70,7 @@ index 29c4cc4..d3b1394 100644
  	mutex_unlock(&priv->reg_mutex);
  	return ret;
  }
-@@ -609,7 +619,9 @@ static int rtl8366ub_sw_port_fdb_dump(struct dsa_switch *ds, int port,
+@@ -609,7 +619,9 @@ static int rtl8366ub_sw_port_fdb_dump(st
  		}
  		if (ret)
  			break;
@@ -83,7 +81,7 @@ index 29c4cc4..d3b1394 100644
  		if (ret || address == 0xfff)
  			break;
  		address++;
-@@ -678,6 +690,28 @@ static int rtl8366ub_sw_port_vlan_filtering(struct dsa_switch *ds, int port,
+@@ -678,6 +690,28 @@ static int rtl8366ub_sw_port_vlan_filter
  	if (!dsa_is_user_port(ds, port))
  		return 0;
  
@@ -112,7 +110,7 @@ index 29c4cc4..d3b1394 100644
  	mutex_lock(&priv->reg_mutex);
  	ret = rtl8366ub_vlan_commit_pvid(priv, port, vlan_filtering);
  	mutex_unlock(&priv->reg_mutex);
-@@ -685,6 +719,28 @@ static int rtl8366ub_sw_port_vlan_filtering(struct dsa_switch *ds, int port,
+@@ -685,6 +719,28 @@ static int rtl8366ub_sw_port_vlan_filter
  	return ret;
  }
  
@@ -141,7 +139,7 @@ index 29c4cc4..d3b1394 100644
  static int rtl8366ub_sw_port_vlan_add(struct dsa_switch *ds, int port,
  									  const struct switchdev_obj_port_vlan *vlan,
  									  struct netlink_ext_ack *extack)
-@@ -893,6 +949,7 @@ static const struct dsa_switch_ops rtl8366ub_switch_ops = {
+@@ -893,6 +949,7 @@ static const struct dsa_switch_ops rtl83
  	.port_mdb_add = rtl8366ub_sw_port_mdb_add,
  	.port_mdb_del = rtl8366ub_sw_port_mdb_del,
  	.port_fast_age = rtl8366ub_sw_port_fast_age,
@@ -149,11 +147,9 @@ index 29c4cc4..d3b1394 100644
  	.port_vlan_filtering = rtl8366ub_sw_port_vlan_filtering,
  	.port_vlan_add = rtl8366ub_sw_port_vlan_add,
  	.port_vlan_del = rtl8366ub_sw_port_vlan_del,
-diff --git a/drivers/net/dsa/realtek/rtl8366ub_l2.c b/drivers/net/dsa/realtek/rtl8366ub_l2.c
-index 1080fe0..f8b835b 100644
 --- a/drivers/net/dsa/realtek/rtl8366ub_l2.c
 +++ b/drivers/net/dsa/realtek/rtl8366ub_l2.c
-@@ -186,19 +186,27 @@ int rtl8366ub_fdb_add(struct rtl8366ub_priv *priv, const u8 *mac, u16 vid,
+@@ -186,19 +186,27 @@ int rtl8366ub_fdb_add(struct rtl8366ub_p
  	return rtl8366ub_l2_commit(priv, mac, vid, data, true);
  }
  
@@ -183,8 +179,6 @@ index 1080fe0..f8b835b 100644
  	rtl8366ub_l2_set_key(data, mac, vid);
  	return rtl8366ub_l2_commit(priv, mac, vid, data, false);
  }
-diff --git a/drivers/net/dsa/realtek/rtl8366ub_l2.h b/drivers/net/dsa/realtek/rtl8366ub_l2.h
-index be9b9ca..cb7c182 100644
 --- a/drivers/net/dsa/realtek/rtl8366ub_l2.h
 +++ b/drivers/net/dsa/realtek/rtl8366ub_l2.h
 @@ -23,7 +23,8 @@ struct rtl8366ub_mdb_entry {

@@ -33,8 +33,6 @@ of hardware-untagged VLANs down to the driver.
 
 Not yet verified on hardware.
 ---
-diff --git a/drivers/net/ethernet/mediatek/mtk_ppe_offload.c b/drivers/net/ethernet/mediatek/mtk_ppe_offload.c
-index 92dd026..cb648bd 100644
 --- a/drivers/net/ethernet/mediatek/mtk_ppe_offload.c
 +++ b/drivers/net/ethernet/mediatek/mtk_ppe_offload.c
 @@ -11,6 +11,7 @@
@@ -45,7 +43,7 @@ index 92dd026..cb648bd 100644
  #include "mtk_eth_soc.h"
  #include "mtk_wed.h"
  
-@@ -185,7 +186,8 @@ mtk_flow_mangle_ipv4(const struct flow_action_entry *act,
+@@ -185,7 +186,8 @@ mtk_flow_mangle_ipv4(const struct flow_a
   * switch below to cover them without per-tagger review.
   */
  static int
@@ -55,7 +53,7 @@ index 92dd026..cb648bd 100644
  {
  #if IS_ENABLED(CONFIG_NET_DSA)
  	struct dsa_port *dp;
-@@ -204,14 +206,26 @@ mtk_flow_get_dsa_port(struct net_device **dev, u16 *push_vid)
+@@ -204,14 +206,26 @@ mtk_flow_get_dsa_port(struct net_device
  			*push_vid = dsa_tag_8021q_standalone_vid(dp);
  		break;
  	case DSA_TAG_PROTO_RTL8366UB_8021Q:
@@ -89,7 +87,7 @@ index 92dd026..cb648bd 100644
  		}
  		break;
  	default:
-@@ -226,11 +240,59 @@ mtk_flow_get_dsa_port(struct net_device **dev, u16 *push_vid)
+@@ -226,11 +240,59 @@ mtk_flow_get_dsa_port(struct net_device
  #endif
  }
  
@@ -150,7 +148,7 @@ index 92dd026..cb648bd 100644
  	struct mtk_wdma_info info = {};
  	struct mtk_mac *mac;
  	int pse_port, dsa_port, queue;
-@@ -261,7 +323,7 @@ mtk_flow_set_output_device(struct mtk_eth *eth, struct mtk_foe_entry *foe,
+@@ -261,7 +323,7 @@ mtk_flow_set_output_device(struct mtk_et
  		goto out;
  	}
  
@@ -159,7 +157,7 @@ index 92dd026..cb648bd 100644
  
  	if (dev == eth->netdev[0])
  		pse_port = PSE_GDM1_PORT;
-@@ -272,8 +334,16 @@ mtk_flow_set_output_device(struct mtk_eth *eth, struct mtk_foe_entry *foe,
+@@ -272,8 +334,16 @@ mtk_flow_set_output_device(struct mtk_et
  	else
  		return -EOPNOTSUPP;
  
@@ -177,7 +175,7 @@ index 92dd026..cb648bd 100644
  			err = mtk_foe_entry_set_vlan(eth, foe, push_vid);
  			if (err)
  				return err;
-@@ -352,7 +422,7 @@ mtk_flow_offload_replace(struct mtk_eth *eth, struct flow_cls_offload *f,
+@@ -352,7 +422,7 @@ mtk_flow_offload_replace(struct mtk_eth
  			 * ppe[mac->ppe_idx]; the lookup misses and the
  			 * flow never binds in HW.
  			 */
@@ -186,7 +184,7 @@ index 92dd026..cb648bd 100644
  			if (mtk_flow_is_valid_idev(eth, idev)) {
  				struct mtk_mac *mac = netdev_priv(idev);
  
-@@ -536,19 +606,22 @@ mtk_flow_offload_replace(struct mtk_eth *eth, struct flow_cls_offload *f,
+@@ -536,19 +606,22 @@ mtk_flow_offload_replace(struct mtk_eth
  	}
  
  	err = mtk_flow_set_output_device(eth, &foe, odev, data.eth.h_dest,

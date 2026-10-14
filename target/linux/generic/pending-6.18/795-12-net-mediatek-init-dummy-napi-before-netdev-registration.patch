@@ -13,20 +13,9 @@ and release it on the registration error path.
 
 Signed-off-by: GL.iNet Test Build <support@gl-inet.com>
 ---
-diff --git a/drivers/net/ethernet/mediatek/mtk_eth_soc.c b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
-index 0c13e2a72b..68edd82895 100644
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.c
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
-@@ -5725,60 +5725,65 @@
- 
- 			if (!eth->ppe[i]) {
- 				err = -ENOMEM;
- 				goto err_deinit_ppe;
- 			}
- 			err = mtk_eth_offload_init(eth, i);
- 
- 			if (err)
- 				goto err_deinit_ppe;
+@@ -5734,6 +5734,21 @@ static int mtk_probe(struct platform_dev
  		}
  	}
  
@@ -48,14 +37,7 @@ index 0c13e2a72b..68edd82895 100644
  	for (i = 0; i < MTK_MAX_DEVS; i++) {
  		if (!eth->netdev[i])
  			continue;
- 
- 		err = register_netdev(eth->netdev[i]);
- 		if (err) {
- 			dev_err(eth->dev, "error bringing up device\n");
- 			goto err_unreg_netdev;
- 		} else
- 			netif_info(eth, probe, eth->netdev[i],
- 				   "mediatek frame engine at 0x%08lx, irq %d\n",
+@@ -5748,20 +5763,6 @@ static int mtk_probe(struct platform_dev
  				   eth->netdev[i]->base_addr, eth->irq[MTK_FE_IRQ_SHARED]);
  	}
  
@@ -76,8 +58,7 @@ index 0c13e2a72b..68edd82895 100644
  	platform_set_drvdata(pdev, eth);
  	schedule_delayed_work(&eth->reset.monitor_work,
  			      MTK_DMA_MONITOR_TIMEOUT);
- 
- 	return 0;
+@@ -5770,6 +5771,10 @@ static int mtk_probe(struct platform_dev
  
  err_unreg_netdev:
  	mtk_unreg_dev(eth);
@@ -88,14 +69,3 @@ index 0c13e2a72b..68edd82895 100644
  err_deinit_ppe:
  	mtk_ppe_deinit(eth);
  	mtk_mdio_cleanup(eth);
- err_free_dev:
- 	mtk_free_dev(eth);
- err_deinit_hw:
- 	mtk_hw_deinit(eth);
- err_wed_exit:
- 	mtk_wed_exit();
- err_destroy_sgmii:
- 	mtk_sgmii_destroy(eth);
- 
--- 
-2.51.0

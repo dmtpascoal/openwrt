@@ -13,11 +13,9 @@ calls mtk_unreg_dev() first, is unaffected.
 
 Not yet verified on hardware.
 ---
-diff --git a/drivers/net/ethernet/mediatek/mtk_eth_soc.c b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
-index 226769b..01c5753 100644
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.c
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
-@@ -4865,8 +4865,20 @@ static int mtk_free_dev(struct mtk_eth *eth)
+@@ -4761,8 +4761,20 @@ static int mtk_free_dev(struct mtk_eth *
  	int i;
  
  	for (i = 0; i < MTK_MAX_DEVS; i++) {
