@@ -1,0 +1,68 @@
+From: Diogo Pascoal <dmtpascoal@gmail.com>
+Subject: [PATCH] net: dsa: tag_rtl8366ub_8021q: send untagged frames on VLAN-aware ports in the PVID
+
+With a VLAN-aware bridge the tagger returns the skb unchanged, relying on
+the bridge to keep the frame's VLAN (TX forwarding offload). Frames sent on
+the port without a tag (STP BPDUs, LLDP, EAPOL, packet sockets, and IGMP/MLD
+reports for which the bridge refuses TX forwarding offload and strips the
+VLAN) reached the CPU port untagged and were dropped, since the CPU port
+only accepts tagged frames. With multicast snooping enabled this breaks
+IGMP/MLD on the port, e.g. IPTV streams stalling.
+
+Tag such frames with the port's PVID, which the switch then egresses the
+way the bridge configured that VLAN. If the port has no PVID the frame is
+passed through as before.
+
+Not yet verified on hardware.
+---
+diff --git a/net/dsa/tag_rtl8366ub_8021q.c b/net/dsa/tag_rtl8366ub_8021q.c
+index 3be77d6..9be4968 100644
+--- a/net/dsa/tag_rtl8366ub_8021q.c
++++ b/net/dsa/tag_rtl8366ub_8021q.c
+@@ -8,6 +8,8 @@
+  */
+ 
+ #include <linux/dsa/8021q.h>
++#include <linux/if_bridge.h>
++#include <linux/if_vlan.h>
+ 
+ #include "tag.h"
+ #include "tag_8021q.h"
+@@ -31,11 +33,32 @@ rtl8366ub_8021q_xmit(struct sk_buff *skb, struct net_device *netdev)
+ 	 * a reliable indication that the bridge management VID is required.
+ 	 */
+ 	if (br) {
+-		if (br_vlan_enabled(br))
+-			return skb;
+-
+-		tx_vid = dsa_tag_8021q_bridge_vid(
+-			dsa_port_bridge_num_get(dp));
++		if (br_vlan_enabled(br)) {
++			u16 pvid = 0;
++
++			/* With TX forwarding offload the bridge keeps the
++			 * frame's VLAN and the switch forwards and untags it.
++			 * Frames sent on the port without a tag (link-local
++			 * protocols, IGMP/MLD the bridge untagged) would be
++			 * dropped by the tagged-only CPU port: send them in
++			 * the port's PVID, which the switch egresses the way
++			 * the bridge configured it.
++			 */
++			if (skb_vlan_tagged(skb))
++				return skb;
++
++			rcu_read_lock();
++			if (br_vlan_get_pvid_rcu(netdev, &pvid))
++				pvid = 0;
++			rcu_read_unlock();
++			if (!pvid)
++				return skb;
++
++			tx_vid = pvid;
++		} else {
++			tx_vid = dsa_tag_8021q_bridge_vid(
++				dsa_port_bridge_num_get(dp));
++		}
+ 	}
+ 
+ 	return dsa_8021q_xmit(skb, netdev, ETH_P_8021Q,

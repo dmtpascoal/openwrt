@@ -1,0 +1,199 @@
+From: Diogo Pascoal <dmtpascoal@gmail.com>
+Subject: [PATCH] net: dsa: rtl8366ub: VLAN configuration and FDB fixes
+
+- Set configure_vlan_while_not_filtering, so that VLANs added while a
+  bridge is VLAN-unaware reach the hardware and are in place when VLAN
+  filtering is turned on later. Without it the trunk came up with no VID
+  membership and failed closed.
+- Allow only one VLAN-aware bridge: received frames on VLAN-aware ports are
+  attributed to a port by VID, so a second VLAN-aware bridge sharing a VID
+  would inject frames into the wrong bridge.
+- Refuse VLAN uppers on ports that are not in a VLAN-aware bridge. Tagged
+  frames there cannot be attributed to the port by the tagger and were
+  dropped silently; bridge VLAN filtering is the supported way.
+- port_fdb_del: only remove an entry that still points at the port, so a
+  stale delete does not remove the address after it moved to another port.
+- port_fdb_dump: report tag_8021q-internal VLANs as VLAN 0.
+- port_stp_state_set: log register write failures instead of ignoring them.
+
+Not yet verified on hardware.
+---
+diff --git a/drivers/net/dsa/realtek/rtl8366ub_dsa.c b/drivers/net/dsa/realtek/rtl8366ub_dsa.c
+index 29c4cc4..d3b1394 100644
+--- a/drivers/net/dsa/realtek/rtl8366ub_dsa.c
++++ b/drivers/net/dsa/realtek/rtl8366ub_dsa.c
+@@ -9,6 +9,8 @@
+ 
+ #include <linux/if_bridge.h>
+ #include <linux/dsa/8021q.h>
++#include <linux/if_vlan.h>
++#include <linux/netdevice.h>
+ #include <linux/etherdevice.h>
+ #include <linux/of_net.h>
+ #include <linux/bitops.h>
+@@ -322,6 +324,10 @@ static int rtl8366ub_sw_setup(struct dsa_switch *ds)
+ 
+ 	ds->max_num_bridges = DSA_TAG_8021Q_MAX_NUM_BRIDGES;
+ 	ds->fdb_isolation = true;
++	/* VLANs added while a bridge is still VLAN-unaware must reach the
++	 * hardware, so that turning VLAN filtering on later finds them.
++	 */
++	ds->configure_vlan_while_not_filtering = true;
+ 	rtnl_lock();
+ 	ret = dsa_tag_8021q_register(ds, htons(ETH_P_8021Q));
+ 	rtnl_unlock();
+@@ -422,6 +428,7 @@ static void rtl8366ub_sw_stp_state_set(struct dsa_switch *ds, int port, u8 state
+ {
+ 	struct rtl8366ub_priv *priv = ds->priv;
+ 	u8 stp_state;
++	int ret;
+ 
+ 	if (dsa_is_unused_port(ds, port))
+ 		return;
+@@ -444,8 +451,11 @@ static void rtl8366ub_sw_stp_state_set(struct dsa_switch *ds, int port, u8 state
+ 	}
+ 
+ 	mutex_lock(&priv->reg_mutex);
+-	rtl8366ub_stp_state_set(priv, port, stp_state);
++	ret = rtl8366ub_stp_state_set(priv, port, stp_state);
+ 	mutex_unlock(&priv->reg_mutex);
++	if (ret)
++		dev_err(priv->dev, "failed to set STP state %u on port %d: %d\n",
++				stp_state, port, ret);
+ }
+ 
+ static int rtl8366ub_sw_port_bridge_join(struct dsa_switch *ds, int port,
+@@ -586,7 +596,7 @@ static int rtl8366ub_sw_port_fdb_del(struct dsa_switch *ds, int port,
+ 	vid = rtl8366ub_sw_l2_vid(vid, db);
+ 
+ 	mutex_lock(&priv->reg_mutex);
+-	ret = rtl8366ub_fdb_del(priv, addr, vid);
++	ret = rtl8366ub_fdb_del(priv, addr, vid, port);
+ 	mutex_unlock(&priv->reg_mutex);
+ 	return ret;
+ }
+@@ -609,7 +619,9 @@ static int rtl8366ub_sw_port_fdb_dump(struct dsa_switch *ds, int port,
+ 		}
+ 		if (ret)
+ 			break;
+-		ret = cb(entry.mac, entry.vid, entry.is_static, data);
++		/* tag_8021q VLANs are internal; report them as VLAN 0 */
++		ret = cb(entry.mac, vid_is_dsa_8021q(entry.vid) ? 0 : entry.vid,
++				 entry.is_static, data);
+ 		if (ret || address == 0xfff)
+ 			break;
+ 		address++;
+@@ -678,6 +690,28 @@ static int rtl8366ub_sw_port_vlan_filtering(struct dsa_switch *ds, int port,
+ 	if (!dsa_is_user_port(ds, port))
+ 		return 0;
+ 
++	/* Frames received on VLAN-aware bridge ports are matched to a port
++	 * by their VID, so two VLAN-aware bridges would be ambiguous.
++	 */
++	if (vlan_filtering) {
++		struct dsa_port *dp = dsa_to_port(ds, port);
++		struct net_device *br = dsa_port_bridge_dev_get(dp);
++		struct dsa_port *other;
++
++		dsa_switch_for_each_user_port(other, ds) {
++			struct net_device *other_br =
++				dsa_port_bridge_dev_get(other);
++
++			if (other == dp || !other_br || other_br == br)
++				continue;
++			if (dsa_port_is_vlan_filtering(other)) {
++				NL_SET_ERR_MSG_MOD(extack,
++						   "Only one VLAN-aware bridge is supported");
++				return -EBUSY;
++			}
++		}
++	}
++
+ 	mutex_lock(&priv->reg_mutex);
+ 	ret = rtl8366ub_vlan_commit_pvid(priv, port, vlan_filtering);
+ 	mutex_unlock(&priv->reg_mutex);
+@@ -685,6 +719,28 @@ static int rtl8366ub_sw_port_vlan_filtering(struct dsa_switch *ds, int port,
+ 	return ret;
+ }
+ 
++static int rtl8366ub_sw_port_prechangeupper(struct dsa_switch *ds, int port,
++					     struct netdev_notifier_changeupper_info *info)
++{
++	struct netlink_ext_ack *extack =
++		netdev_notifier_info_to_extack(&info->info);
++	struct dsa_port *dp = dsa_to_port(ds, port);
++
++	if (!info->linking || !is_vlan_dev(info->upper_dev))
++		return 0;
++
++	/* The tagger can only attribute VLAN-tagged frames to a port that
++	 * is in a VLAN-aware bridge; elsewhere they would be dropped
++	 * silently, so refuse the VLAN upper instead.
++	 */
++	if (dsa_port_bridge_dev_get(dp) && dsa_port_is_vlan_filtering(dp))
++		return 0;
++
++	NL_SET_ERR_MSG_MOD(extack,
++			   "VLAN uppers need the port in a VLAN-aware bridge; use bridge VLAN filtering instead");
++	return -EOPNOTSUPP;
++}
++
+ static int rtl8366ub_sw_port_vlan_add(struct dsa_switch *ds, int port,
+ 									  const struct switchdev_obj_port_vlan *vlan,
+ 									  struct netlink_ext_ack *extack)
+@@ -893,6 +949,7 @@ static const struct dsa_switch_ops rtl8366ub_switch_ops = {
+ 	.port_mdb_add = rtl8366ub_sw_port_mdb_add,
+ 	.port_mdb_del = rtl8366ub_sw_port_mdb_del,
+ 	.port_fast_age = rtl8366ub_sw_port_fast_age,
++	.port_prechangeupper = rtl8366ub_sw_port_prechangeupper,
+ 	.port_vlan_filtering = rtl8366ub_sw_port_vlan_filtering,
+ 	.port_vlan_add = rtl8366ub_sw_port_vlan_add,
+ 	.port_vlan_del = rtl8366ub_sw_port_vlan_del,
+diff --git a/drivers/net/dsa/realtek/rtl8366ub_l2.c b/drivers/net/dsa/realtek/rtl8366ub_l2.c
+index 1080fe0..f8b835b 100644
+--- a/drivers/net/dsa/realtek/rtl8366ub_l2.c
++++ b/drivers/net/dsa/realtek/rtl8366ub_l2.c
+@@ -186,19 +186,27 @@ int rtl8366ub_fdb_add(struct rtl8366ub_priv *priv, const u8 *mac, u16 vid,
+ 	return rtl8366ub_l2_commit(priv, mac, vid, data, true);
+ }
+ 
+-int rtl8366ub_fdb_del(struct rtl8366ub_priv *priv, const u8 *mac, u16 vid)
++int rtl8366ub_fdb_del(struct rtl8366ub_priv *priv, const u8 *mac, u16 vid,
++					  u8 port)
+ {
+ 	u16 data[RTL8366UB_L2_ENTRY_WORDS];
++	int physical = rtl8366ub_l2_phys_port(port);
+ 	u16 address = 0;
+ 	int ret;
+ 
+-	if (!is_unicast_ether_addr(mac))
++	if (!is_unicast_ether_addr(mac) || physical < 0)
+ 		return -EINVAL;
+ 	ret = rtl8366ub_l2_lookup(priv, mac, vid, &address, data);
+ 	if (ret == -ENOENT)
+ 		return 0;
+ 	if (ret)
+ 		return ret;
++	/* The address may have moved to another port since it was added
++	 * here; only remove an entry that still points at this port.
++	 */
++	if ((FIELD_GET(RTL8366UB_L2_PORT_LO, data[3]) |
++	     FIELD_GET(RTL8366UB_L2_PORT_HI, data[4]) << 2) != physical)
++		return 0;
+ 	rtl8366ub_l2_set_key(data, mac, vid);
+ 	return rtl8366ub_l2_commit(priv, mac, vid, data, false);
+ }
+diff --git a/drivers/net/dsa/realtek/rtl8366ub_l2.h b/drivers/net/dsa/realtek/rtl8366ub_l2.h
+index be9b9ca..cb7c182 100644
+--- a/drivers/net/dsa/realtek/rtl8366ub_l2.h
++++ b/drivers/net/dsa/realtek/rtl8366ub_l2.h
+@@ -23,7 +23,8 @@ struct rtl8366ub_mdb_entry {
+ int rtl8366ub_l2_setup(struct rtl8366ub_priv *priv, int cpu_port);
+ int rtl8366ub_fdb_add(struct rtl8366ub_priv *priv, const u8 *mac, u16 vid,
+ 					  u8 port, bool is_static);
+-int rtl8366ub_fdb_del(struct rtl8366ub_priv *priv, const u8 *mac, u16 vid);
++int rtl8366ub_fdb_del(struct rtl8366ub_priv *priv, const u8 *mac, u16 vid,
++					  u8 port);
+ int rtl8366ub_fdb_next(struct rtl8366ub_priv *priv, u16 *address, int port,
+ 					   struct rtl8366ub_fdb_entry *entry);
+ int rtl8366ub_fdb_flush(struct rtl8366ub_priv *priv, int port);

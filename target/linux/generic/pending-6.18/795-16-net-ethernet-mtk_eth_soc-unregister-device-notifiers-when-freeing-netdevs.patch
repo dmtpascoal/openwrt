@@ -1,0 +1,40 @@
+From: Diogo Pascoal <dmtpascoal@gmail.com>
+Subject: [PATCH] net: ethernet: mtk_eth_soc: unregister device notifiers when freeing netdevs
+
+mtk_add_mac() registers a netdevice notifier for each MAC on QDMA SoCs,
+but only mtk_unreg_dev() removed it. Several probe error paths (e.g. a
+failed dummy NAPI allocation, err_free_dev, err_deinit_ppe) free the
+netdevs without going through mtk_unreg_dev(), leaving a freed notifier on
+the netdevice chain, used after free on the next netdevice event.
+
+Unregister the notifiers in mtk_free_dev() too. Unregistering one that is
+not on the chain only returns -ENOENT, so the normal remove path, which
+calls mtk_unreg_dev() first, is unaffected.
+
+Not yet verified on hardware.
+---
+diff --git a/drivers/net/ethernet/mediatek/mtk_eth_soc.c b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
+index 226769b..01c5753 100644
+--- a/drivers/net/ethernet/mediatek/mtk_eth_soc.c
++++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
+@@ -4865,8 +4865,20 @@ static int mtk_free_dev(struct mtk_eth *eth)
+ 	int i;
+ 
+ 	for (i = 0; i < MTK_MAX_DEVS; i++) {
++		struct mtk_mac *mac;
++
+ 		if (!eth->netdev[i])
+ 			continue;
++
++		/* mtk_add_mac() registers the notifier as soon as the netdev
++		 * exists, but only mtk_unreg_dev() removed it, and several
++		 * probe error paths free the netdevs without going through
++		 * mtk_unreg_dev(). Unregistering one that is not on the chain
++		 * just returns -ENOENT.
++		 */
++		mac = netdev_priv(eth->netdev[i]);
++		if (MTK_HAS_CAPS(eth->soc->caps, MTK_QDMA))
++			unregister_netdevice_notifier(&mac->device_notifier);
+ 		free_netdev(eth->netdev[i]);
+ 	}
+ 
