@@ -136,7 +136,8 @@ mediatek_setup_interfaces()
 		ucidef_set_interfaces_lan_wan "lan1" eth1
 		;;
 	comfast,cf-wa933|\
-	comfast,cf-wa933-128m)
+	comfast,cf-wa933-128m|\
+	glinet,gl-mt5000)
 		ucidef_set_interfaces_lan_wan "lan1 lan2" eth1
 		;;
 	cudy,ap3000wall-v1)
@@ -173,9 +174,6 @@ mediatek_setup_interfaces()
 	wavlink,wl-wnt100x3|\
 	wavlink,wl-wnt100x3-ubootmod)
 		ucidef_set_interfaces_lan_wan eth0 eth1
-		;;
-	glinet,gl-mt5000)
-		ucidef_set_interfaces_lan_wan "lan1 lan2" eth1
 		;;
 	bazis,ax3000wm|\
 	cudy,m3000-v1|\

@@ -968,6 +968,26 @@ endef
 $(eval $(call KernelPackage,dsa-rtl8365mb))
 
 
+define KernelPackage/dsa-rtl8366ub
+  SUBMENU:=$(NETWORK_DEVICES_MENU)
+  TITLE:=Realtek RTL8366UB switch DSA support
+  DEPENDS:=+kmod-dsa-realtek @!TARGET_x86 @!TARGET_bcm47xx @!TARGET_uml
+  KCONFIG:= \
+	CONFIG_NET_DSA_REALTEK_RTL8366UB \
+	CONFIG_NET_DSA_TAG_RTL8366UB_8021Q
+  FILES:= \
+	$(LINUX_DIR)/drivers/net/dsa/realtek/rtl8366ub.ko \
+	$(LINUX_DIR)/net/dsa/tag_rtl8366ub_8021q.ko
+  AUTOLOAD:=$(call AutoLoad,42,tag_rtl8366ub_8021q rtl8366ub,1)
+endef
+
+define KernelPackage/dsa-rtl8366ub/description
+  DSA driver and 802.1Q tagger for the Realtek RTL8366UB (RTL8371C) switch
+endef
+
+$(eval $(call KernelPackage,dsa-rtl8366ub))
+
+
 define KernelPackage/dsa-ks8995
   SUBMENU:=$(NETWORK_DEVICES_MENU)
   TITLE:=Micrel/Kendin KS8995 Ethernet DSA Switch

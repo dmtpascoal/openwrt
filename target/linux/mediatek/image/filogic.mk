@@ -2045,8 +2045,8 @@ define Device/glinet_gl-mt5000
   DEVICE_MODEL := GL-MT5000
   DEVICE_DTS := mt7987a-glinet-gl-mt5000
   DEVICE_DTS_DIR := ../dts
-  DEVICE_PACKAGES := mkf2fs blkid blockdev kmod-fs-ext4 mt7987-2p5g-phy-firmware \
-                     kmod-mmc kmod-fs-f2fs kmod-fs-vfat
+  DEVICE_PACKAGES := f2fsck mkf2fs kmod-dsa-rtl8366ub kmod-usb3 \
+                     mt7987-2p5g-phy-firmware
   IMAGES += factory.bin
   IMAGE/factory.bin := append-kernel | pad-to 32M | append-rootfs
   IMAGE/sysupgrade.bin := sysupgrade-tar | append-gl-metadata
