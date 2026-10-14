@@ -1,183 +1,174 @@
 name: Build GL-MT5000
 
+# Builds an OpenWrt image for the GL.iNet GL-MT5000 (Brume 3) from the branch
+# the workflow is started on. The base image is the device plus LuCI; extra
+# packages come from the opt-in profiles in .github/mt5000/profiles/
+# (e.g. "amneziawg wireguard adguardhome avahi ddns-cloudflare").
+#
+# Optional repository secret APK_SIGNING_KEY: an EC prime256v1 private key in
+# PEM format. When set, every build signs packages with the same key, so
+# packages from later builds can be installed on a flashed router.
+
 on:
   workflow_dispatch:
+    inputs:
+      profiles:
+        description: "Space-separated extra profiles from .github/mt5000/profiles"
+        required: false
+        default: ""
 
 jobs:
   build:
     runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    env:
+      PROFILES: ${{ inputs.profiles }}
+      TARGET_DIR: bin/targets/mediatek/filogic
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: mt5000-custom
-          fetch-depth: 0
-
-      - name: Free disk space
-        run: |
-          # kmod-amneziawg copies the whole kernel build tree into its build dir.
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
-            /opt/hostedtoolcache/CodeQL /usr/local/share/boost
-          sudo docker image prune --all --force >/dev/null 2>&1 || true
-          df -h /
+        uses: actions/checkout@v5
 
       - name: Install build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential \
-            clang \
-            flex \
-            bison \
-            gawk \
-            gcc-multilib \
-            g++-multilib \
-            gettext \
-            git \
-            libncurses-dev \
-            libssl-dev \
-            python3 \
-            rsync \
-            unzip \
-            zlib1g-dev \
-            file \
-            wget \
-            subversion \
-            swig \
-            time \
-            xsltproc
+            build-essential clang flex bison gawk gcc-multilib g++-multilib \
+            gettext git libncurses-dev libssl-dev python3 rsync unzip \
+            zlib1g-dev file wget subversion swig time xsltproc ccache
+          df -h /
 
-      - name: Verify source revision
+      - name: Validate profiles
         run: |
-          set -eux
+          set -eu
+          for p in $PROFILES; do
+            test -f ".github/mt5000/profiles/$p.config" || {
+              echo "::error::unknown profile '$p'"; exit 1; }
+          done
 
-          echo "HEAD:"
-          git rev-parse HEAD
-
-          echo
-          echo "Recent commits:"
-          git log --oneline -8
-
-          echo
-          echo "Checking required MT5000 changes:"
-
-          # dmsza's mtk_eth unwind fix (openwrt#24237); implies his whole rebuilt series.
-          git merge-base --is-ancestor \
-            2087e3175c0fb391dd94c366588c3fbbcd8950a5 \
-            HEAD
-
-          # Kyklas's factory NVMEM cells (checked by content: SHA changes on rebase).
-          grep -q 'country-code@88' \
-            target/linux/mediatek/dts/mt7987a-glinet-gl-mt5000.dts
-
-          echo "Required MT5000 commits are present."
-
-      - name: Update feeds
-        run: ./scripts/feeds update -a
-
-      - name: Install feeds
-        run: ./scripts/feeds install -a
-
-      - name: Configure GL-MT5000
+      - name: Check device support is present
         run: |
-          set -eux
+          set -eu
+          grep -q 'Device/glinet_gl-mt5000' target/linux/mediatek/image/filogic.mk
+          test -f target/linux/mediatek/dts/mt7987a-glinet-gl-mt5000.dts
+          grep -q 'KernelPackage/dsa-rtl8366ub' package/kernel/linux/modules/netdevices.mk
+          for n in 10 11 12 13 14 15 16; do
+            ls target/linux/generic/pending-6.18/795-$n-*.patch >/dev/null
+          done
 
-          cat > .config <<'CONFIG'
-          CONFIG_TARGET_mediatek=y
-          CONFIG_TARGET_mediatek_filogic=y
-          CONFIG_TARGET_mediatek_filogic_DEVICE_glinet_gl-mt5000=y
-          CONFIG_TARGET_ROOTFS_INITRAMFS=y
-          CONFIG_TARGET_ROOTFS_TARGZ=y
-          CONFIG_TARGET_IMAGES_GZIP=y
-          CONFIG_TARGET_INITRAMFS_COMPRESSION_GZIP=y
-          CONFIG_PACKAGE_kmod-fs-ext4=y
-          CONFIG_PACKAGE_kmod-fs-f2fs=y
-          CONFIG_PACKAGE_kmod-fs-vfat=y
-          CONFIG_PACKAGE_kmod-mmc=y
-          CONFIG_PACKAGE_mkf2fs=y
-          CONFIG_PACKAGE_blkid=y
-          CONFIG_PACKAGE_blockdev=y
-          CONFIG_PACKAGE_kmod-mt7987-2p5g-phy-firmware=y
-          # Kernel 6.18 made CRYPTO_LIB_CHACHA20POLY1305/CURVE25519 promptless:
-          # only in-kernel users can select them, so the out-of-tree
-          # kmod-amneziawg cannot. kmod-wireguard (CONFIG_WIREGUARD) selects both.
-          CONFIG_PACKAGE_kmod-wireguard=y
-          CONFIG_PACKAGE_kmod-amneziawg=y
-          CONFIG_PACKAGE_amneziawg-tools=y
-          CONFIG_PACKAGE_luci=y
-          CONFIG_PACKAGE_luci-proto-amneziawg=y
-          CONFIG_PACKAGE_adguardhome=y
-          CONFIG_PACKAGE_wireguard-tools=y
-          CONFIG_PACKAGE_luci-proto-wireguard=y
-          CONFIG_PACKAGE_avahi-nodbus-daemon=y
-          CONFIG_PACKAGE_ddns-scripts-cloudflare=y
-          CONFIG_PACKAGE_luci-app-ddns=y
-          CONFIG
+      - name: Set up Go (AdGuard Home)
+        if: contains(inputs.profiles, 'adguardhome')
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
 
+      - name: Restore download cache
+        uses: actions/cache@v4
+        with:
+          path: dl
+          key: dl-${{ github.run_id }}
+          restore-keys: dl-
+
+      - name: Restore compiler cache
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.run_id }}
+          restore-keys: ccache-
+
+      - name: Feeds
+        run: |
+          set -eu
+          cp feeds.conf.default feeds.conf
+          for p in $PROFILES; do
+            f=".github/mt5000/profiles/$p.feeds"
+            [ -f "$f" ] && cat "$f" >> feeds.conf
+          done
+          ./scripts/feeds update -a
+          for p in $PROFILES; do
+            h=".github/mt5000/profiles/$p.post-feeds.sh"
+            [ -x "$h" ] && "$h"
+          done
+          ./scripts/feeds install -a
+
+      - name: Configure
+        run: |
+          set -eu
+          {
+            cat .github/mt5000/default.config
+            for p in $PROFILES; do cat ".github/mt5000/profiles/$p.config"; done
+            # Build speed: compiler cache, and skip the toolchain debugger.
+            echo CONFIG_DEVEL=y
+            echo CONFIG_CCACHE=y
+            echo CONFIG_TOOLCHAINOPTS=y
+            echo '# CONFIG_GDB is not set'
+            if command -v go >/dev/null; then
+              echo "CONFIG_GOLANG_EXTERNAL_BOOTSTRAP_ROOT=\"$(go env GOROOT)\""
+            fi
+          } > .config
+          cp .config requested.config
           make defconfig
+          # Every package that was asked for must have survived defconfig.
+          missing=0
+          for sym in $(grep -oE '^CONFIG_PACKAGE_[^=]+=y' requested.config); do
+            grep -qx "$sym" .config || { echo "::error::$sym dropped by defconfig"; missing=1; }
+          done
+          [ "$missing" = 0 ]
+          grep -x 'CONFIG_TARGET_mediatek_filogic_DEVICE_glinet_gl-mt5000=y' .config
 
-          echo
-          echo "Selected target:"
-          grep '^CONFIG_TARGET' .config
-
-          echo
-          echo "MT5000 selection:"
-          grep 'CONFIG_TARGET_mediatek_filogic_DEVICE_glinet_gl-mt5000' .config
-
-          echo
-          echo "AmneziaWG selection:"
-          grep -x 'CONFIG_PACKAGE_kmod-amneziawg=y' .config
-          grep -x 'CONFIG_PACKAGE_kmod-wireguard=y' .config
-          grep -x 'CONFIG_PACKAGE_amneziawg-tools=y' .config
-
-          echo
-          echo "LuCI selection:"
-          grep -x 'CONFIG_PACKAGE_luci=y' .config
-          grep -x 'CONFIG_PACKAGE_luci-proto-amneziawg=y' .config
-
-          echo
-          echo "Homelab packages:"
-          grep -x 'CONFIG_PACKAGE_adguardhome=y' .config
-          grep -x 'CONFIG_PACKAGE_wireguard-tools=y' .config
-          grep -x 'CONFIG_PACKAGE_luci-proto-wireguard=y' .config
-          grep -x 'CONFIG_PACKAGE_avahi-nodbus-daemon=y' .config
-          grep -x 'CONFIG_PACKAGE_ddns-scripts-cloudflare=y' .config
-          grep -x 'CONFIG_PACKAGE_luci-app-ddns=y' .config
+      - name: Package signing key
+        env:
+          APK_SIGNING_KEY: ${{ secrets.APK_SIGNING_KEY }}
+        run: |
+          if [ -n "$APK_SIGNING_KEY" ]; then
+            printf '%s\n' "$APK_SIGNING_KEY" > private-key.pem
+            chmod 600 private-key.pem
+            echo "Using the persistent package signing key."
+          else
+            echo "::notice::No APK_SIGNING_KEY secret; packages are signed with a throwaway key."
+          fi
 
       - name: Download sources
-        run: make download -j2
+        run: make download -j8 || make download -j1 V=s
 
       - name: Build
-        run: make -j2 V=s
+        run: make -j$(nproc) || make -j1 V=s
 
-      - name: List firmware
+      - name: Verify output
         run: |
-          set -eux
-          df -h /
-          find bin -name '*amneziawg*' -print
-          ls -lah bin/targets/mediatek/filogic
+          set -eu
+          ls -lah "$TARGET_DIR"
+          for img in squashfs-sysupgrade.bin squashfs-factory.bin initramfs-kernel.bin; do
+            test -s "$TARGET_DIR/openwrt-mediatek-filogic-glinet_gl-mt5000-$img"
+          done
+          manifest="$TARGET_DIR/openwrt-mediatek-filogic-glinet_gl-mt5000.manifest"
+          test -s "$manifest"
+          missing=0
+          for pkg in $(grep -oE '^CONFIG_PACKAGE_[^=]+=y' requested.config | sed 's/^CONFIG_PACKAGE_//; s/=y$//'); do
+            grep -q "^$pkg " "$manifest" || { echo "::error::$pkg missing from the image"; missing=1; }
+          done
+          [ "$missing" = 0 ]
+          if grep -qx 'CONFIG_PACKAGE_kmod-amneziawg=y' .config; then
+            ko=$(find build_dir -name amneziawg.ko | head -1); test -n "$ko"
+            kver=$(sed -n 's/^LINUX_VERSION-6.18 = //p' target/linux/generic/kernel-6.18)
+            strings "$ko" | grep -q "^vermagic=6.18$kver "
+          fi
 
-      - name: Generate checksums
-        run: |
-          cd bin/targets/mediatek/filogic
-          find . -maxdepth 1 -type f ! -name sha256sums.txt -print0 |
-            sort -z |
-            xargs -0 sha256sum > sha256sums.txt
-
-      - name: Upload firmware
-        uses: actions/upload-artifact@v4
+      - name: Upload images
+        uses: actions/upload-artifact@v5
         with:
           name: gl-mt5000-firmware
-          path: |
-            bin/targets/mediatek/filogic/*.bin
-            bin/targets/mediatek/filogic/*.itb
-            bin/targets/mediatek/filogic/*.gz
-            bin/targets/mediatek/filogic/*.img
-            bin/targets/mediatek/filogic/sha256sums.txt
-            bin/targets/mediatek/filogic/config.buildinfo
-            bin/targets/mediatek/filogic/feeds.buildinfo
-            bin/targets/mediatek/filogic/version.buildinfo
-            bin/targets/mediatek/filogic/packages/kmod-amneziawg*
-            bin/packages/*/amneziawg/*
           if-no-files-found: error
+          path: |
+            ${{ env.TARGET_DIR }}/*glinet_gl-mt5000*
+            ${{ env.TARGET_DIR }}/sha256sums
+            ${{ env.TARGET_DIR }}/*.buildinfo
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v5
+        with:
+          name: gl-mt5000-packages
+          if-no-files-found: error
+          path: |
+            ${{ env.TARGET_DIR }}/packages
+            bin/packages
