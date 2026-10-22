@@ -104,7 +104,7 @@ Not yet verified on hardware.
 + * with any other egress-untagged VLAN on the port the flow could belong
 + * to either, so it is left to software, as is anything else.
 + */
- static int
++static int
 +mtk_flow_set_vlan_aware_tag(struct mtk_eth *eth, struct mtk_foe_entry *foe,
 +			    struct net_device *user_dev,
 +			    const struct mtk_flow_data *data)
@@ -149,7 +149,7 @@ Not yet verified on hardware.
 +	return untagged ? mtk_foe_entry_set_vlan(eth, foe, vid) : 0;
 +}
 +
-+static int
+ static int
  mtk_flow_set_output_device(struct mtk_eth *eth, struct mtk_foe_entry *foe,
  			   struct net_device *dev, const u8 *dest_mac,
 -			   int *wed_index)
