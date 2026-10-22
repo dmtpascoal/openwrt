@@ -18,32 +18,35 @@ stalls for WAN<->LAN flows over a VLAN trunk with hardware flow offloading.
 For VLAN-aware bridges build the same single 802.1Q tag the software path
 uses: accept a flowtable VLAN push only when that VLAN is tagged on the
 port, and push the port's PVID when the bridge path marked the egress VLAN
-as hardware-untagged (no push requested), provided the PVID is untagged on
-the port. Use dsa_port_is_vlan_filtering(), which reflects what the switch
-was programmed with. Anything else stays in software.
+as hardware-untagged (no push requested), provided the PVID is the only
+VLAN untagged on the port. Use dsa_port_is_vlan_filtering(), which
+reflects what the switch was programmed with. Anything else stays in
+software.
 
 Also refuse to bind a flow that would need more than the two VLAN tags the
 PPE can insert on the standalone/VLAN-unaware paths (it silently dropped
 the extra tag before), and check mtk_foe_entry_set_vlan() for the
 flowtable's tags before taking a WED reference.
 
-Known limitation: a VLAN-aware port with more than one egress-untagged VLAN
-is assumed to send the PVID untagged; the flowtable does not pass the VID
-of hardware-untagged VLANs down to the driver.
+The flowtable does not pass the VID of a hardware-untagged egress VLAN
+down to the driver, so the PVID stands in for it only when it is the one
+VLAN the port sends untagged. If the port has any other egress-untagged
+VLAN the flow could belong to either, and it stays in software.
 
 Not yet verified on hardware.
 ---
 --- a/drivers/net/ethernet/mediatek/mtk_ppe_offload.c
 +++ b/drivers/net/ethernet/mediatek/mtk_ppe_offload.c
-@@ -11,6 +11,7 @@
+@@ -11,6 +11,8 @@
  #include <net/pkt_cls.h>
  #include <net/dsa.h>
  #include <linux/dsa/8021q.h>
 +#include <linux/if_bridge.h>
++#include <linux/if_vlan.h>
  #include "mtk_eth_soc.h"
  #include "mtk_wed.h"
  
-@@ -185,7 +186,8 @@ mtk_flow_mangle_ipv4(const struct flow_a
+@@ -185,7 +187,8 @@ mtk_flow_mangle_ipv4(const struct flow_a
   * switch below to cover them without per-tagger review.
   */
  static int
@@ -53,7 +56,7 @@ Not yet verified on hardware.
  {
  #if IS_ENABLED(CONFIG_NET_DSA)
  	struct dsa_port *dp;
-@@ -204,14 +206,26 @@ mtk_flow_get_dsa_port(struct net_device
+@@ -204,14 +207,26 @@ mtk_flow_get_dsa_port(struct net_device
  			*push_vid = dsa_tag_8021q_standalone_vid(dp);
  		break;
  	case DSA_TAG_PROTO_RTL8366UB_8021Q:
@@ -87,7 +90,7 @@ Not yet verified on hardware.
  		}
  		break;
  	default:
-@@ -226,11 +240,59 @@ mtk_flow_get_dsa_port(struct net_device
+@@ -226,11 +241,68 @@ mtk_flow_get_dsa_port(struct net_device
  #endif
  }
  
@@ -96,20 +99,19 @@ Not yet verified on hardware.
 + *
 + * When that VLAN is tagged on the port, the flowtable pushes it. When it
 + * is untagged there, the bridge path marks it hardware-untagged and no
-+ * push is requested, so the VID is not passed down; use the port's PVID,
-+ * provided the PVID is a VLAN the port sends untagged. A port with more
-+ * than one egress-untagged VLAN cannot be told apart here, so such setups
-+ * are expected to keep the untagged VLAN as the PVID. Anything else is
-+ * left to software.
++ * push is requested, so the VID is not passed down. The port's PVID then
++ * identifies it only if the PVID is the one VLAN the port sends untagged;
++ * with any other egress-untagged VLAN on the port the flow could belong
++ * to either, so it is left to software, as is anything else.
 + */
-+static int
+ static int
 +mtk_flow_set_vlan_aware_tag(struct mtk_eth *eth, struct mtk_foe_entry *foe,
 +			    struct net_device *user_dev,
 +			    const struct mtk_flow_data *data)
 +{
 +	struct bridge_vlan_info vinfo = {};
 +	bool untagged;
-+	u16 vid;
++	u16 vid, other;
 +	int err;
 +
 +	if (data->vlan.num > 1)
@@ -126,6 +128,16 @@ Not yet verified on hardware.
 +			return -EOPNOTSUPP;
 +		}
 +		untagged = true;
++
++		for (other = 1; other < VLAN_VID_MASK; other++) {
++			if (other == vid ||
++			    br_vlan_get_info_rcu(user_dev, other, &vinfo))
++				continue;
++			if (vinfo.flags & BRIDGE_VLAN_INFO_UNTAGGED) {
++				rcu_read_unlock();
++				return -EOPNOTSUPP;
++			}
++		}
 +	}
 +	err = br_vlan_get_info_rcu(user_dev, vid, &vinfo);
 +	rcu_read_unlock();
@@ -137,7 +149,7 @@ Not yet verified on hardware.
 +	return untagged ? mtk_foe_entry_set_vlan(eth, foe, vid) : 0;
 +}
 +
- static int
++static int
  mtk_flow_set_output_device(struct mtk_eth *eth, struct mtk_foe_entry *foe,
  			   struct net_device *dev, const u8 *dest_mac,
 -			   int *wed_index)
@@ -148,7 +160,7 @@ Not yet verified on hardware.
  	struct mtk_wdma_info info = {};
  	struct mtk_mac *mac;
  	int pse_port, dsa_port, queue;
-@@ -261,7 +323,7 @@ mtk_flow_set_output_device(struct mtk_et
+@@ -261,7 +333,7 @@ mtk_flow_set_output_device(struct mtk_et
  		goto out;
  	}
  
@@ -157,7 +169,7 @@ Not yet verified on hardware.
  
  	if (dev == eth->netdev[0])
  		pse_port = PSE_GDM1_PORT;
-@@ -272,8 +334,16 @@ mtk_flow_set_output_device(struct mtk_et
+@@ -272,8 +344,16 @@ mtk_flow_set_output_device(struct mtk_et
  	else
  		return -EOPNOTSUPP;
  
@@ -175,7 +187,7 @@ Not yet verified on hardware.
  			err = mtk_foe_entry_set_vlan(eth, foe, push_vid);
  			if (err)
  				return err;
-@@ -352,7 +422,7 @@ mtk_flow_offload_replace(struct mtk_eth
+@@ -352,7 +432,7 @@ mtk_flow_offload_replace(struct mtk_eth
  			 * ppe[mac->ppe_idx]; the lookup misses and the
  			 * flow never binds in HW.
  			 */
@@ -184,7 +196,7 @@ Not yet verified on hardware.
  			if (mtk_flow_is_valid_idev(eth, idev)) {
  				struct mtk_mac *mac = netdev_priv(idev);
  
-@@ -536,19 +606,22 @@ mtk_flow_offload_replace(struct mtk_eth
+@@ -536,19 +616,22 @@ mtk_flow_offload_replace(struct mtk_eth
  	}
  
  	err = mtk_flow_set_output_device(eth, &foe, odev, data.eth.h_dest,
