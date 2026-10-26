@@ -412,7 +412,7 @@ software-forwarded membership messages leave only the selected port.
 +}
 --- /dev/null
 +++ b/drivers/net/dsa/realtek/rtl8366ub_dsa.c
-@@ -0,0 +1,952 @@
+@@ -0,0 +1,947 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * This is a sparsely documented chip, the only viable documentation seems
@@ -434,11 +434,6 @@ software-forwarded membership messages leave only the selected port.
 +#include "rtl8366ub_init.h"
 +#include "rtl8366ub_l2.h"
 +#include "rtl8366ub_mib.h"
-+
-+struct rtl8366ub_dbg {
-+	const char *name;
-+	struct file_operations ops;
-+};
 +
 +static int rtl8366ub_find_cpu_port(struct dsa_switch *ds)
 +{
@@ -1367,7 +1362,8 @@ software-forwarded membership messages leave only the selected port.
 +MODULE_LICENSE("GPL");
 --- /dev/null
 +++ b/drivers/net/dsa/realtek/rtl8366ub_dsa.h
-@@ -0,0 +1,100 @@
+@@ -0,0 +1,101 @@
++/* SPDX-License-Identifier: GPL-2.0 */
 +#ifndef __RTL8366_DSA_H__
 +#define __RTL8366_DSA_H__
 +
@@ -3511,7 +3507,7 @@ software-forwarded membership messages leave only the selected port.
  }
 --- /dev/null
 +++ b/net/dsa/tag_rtl8366ub_8021q.c
-@@ -0,0 +1,267 @@
+@@ -0,0 +1,269 @@
 +// SPDX-License-Identifier: GPL-2.0-or-later
 +/*
 + * 802.1Q-based DSA tagger for the GL.iNet RTL8366UB switch driver
@@ -3729,6 +3725,8 @@ software-forwarded membership messages leave only the selected port.
 +		src_port = rtl8366ub_8021q_control_rcv(skb);
 +		if (src_port < 0)
 +			return NULL;
++		/* The RTL8_4 header is gone; point eth_hdr() at the moved MACs. */
++		skb_set_mac_header(skb, -ETH_HLEN);
 +		switch_id = netdev->dsa_ptr->ds->index;
 +		trapped = true;
 +	}
