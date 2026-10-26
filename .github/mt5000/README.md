@@ -18,6 +18,7 @@ or list extra profiles from `profiles/`, separated by spaces:
 | Profile | Adds |
 |---|---|
 | `amneziawg` | AmneziaWG 3.1 kernel module, `awg`, LuCI page |
+| `amneziawg-server` | AmneziaWG server `awg0` (UDP 51820, 10.1.0.1/24, no peers) created on first boot with its own key and random obfuscation values; list with `amneziawg` |
 | `wireguard` | `wireguard-tools`, LuCI page |
 | `adguardhome` | AdGuard Home |
 | `avahi` | avahi daemon without D-Bus (mDNS, reflector) |
