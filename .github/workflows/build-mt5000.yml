@@ -1,0 +1,174 @@
+name: Build GL-MT5000
+
+# Builds an OpenWrt image for the GL.iNet GL-MT5000 (Brume 3) from the branch
+# the workflow is started on. The base image is the device plus LuCI; extra
+# packages come from the opt-in profiles in .github/mt5000/profiles/
+# (e.g. "amneziawg wireguard adguardhome avahi ddns-cloudflare").
+#
+# Optional repository secret APK_SIGNING_KEY: an EC prime256v1 private key in
+# PEM format. When set, every build signs packages with the same key, so
+# packages from later builds can be installed on a flashed router.
+
+on:
+  workflow_dispatch:
+    inputs:
+      profiles:
+        description: "Space-separated extra profiles from .github/mt5000/profiles"
+        required: false
+        default: ""
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    env:
+      PROFILES: ${{ inputs.profiles }}
+      TARGET_DIR: bin/targets/mediatek/filogic
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential clang flex bison gawk gcc-multilib g++-multilib \
+            gettext git libncurses-dev libssl-dev python3 rsync unzip \
+            zlib1g-dev file wget subversion swig time xsltproc ccache
+          df -h /
+
+      - name: Validate profiles
+        run: |
+          set -eu
+          for p in $PROFILES; do
+            test -f ".github/mt5000/profiles/$p.config" || {
+              echo "::error::unknown profile '$p'"; exit 1; }
+          done
+
+      - name: Check device support is present
+        run: |
+          set -eu
+          grep -q 'Device/glinet_gl-mt5000' target/linux/mediatek/image/filogic.mk
+          test -f target/linux/mediatek/dts/mt7987a-glinet-gl-mt5000.dts
+          grep -qx 'CONFIG_NET_DSA_REALTEK_RTL8366UB=y' target/linux/mediatek/filogic/config-6.18
+          for n in 10 11; do
+            ls target/linux/generic/pending-6.18/795-$n-*.patch >/dev/null
+          done
+
+      - name: Set up Go (AdGuard Home)
+        if: contains(inputs.profiles, 'adguardhome')
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Restore download cache
+        uses: actions/cache@v4
+        with:
+          path: dl
+          key: dl-${{ github.run_id }}
+          restore-keys: dl-
+
+      - name: Restore compiler cache
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.run_id }}
+          restore-keys: ccache-
+
+      - name: Feeds
+        run: |
+          set -eu
+          cp feeds.conf.default feeds.conf
+          for p in $PROFILES; do
+            f=".github/mt5000/profiles/$p.feeds"
+            [ -f "$f" ] && cat "$f" >> feeds.conf
+          done
+          ./scripts/feeds update -a
+          for p in $PROFILES; do
+            h=".github/mt5000/profiles/$p.post-feeds.sh"
+            [ -x "$h" ] && "$h"
+          done
+          ./scripts/feeds install -a
+
+      - name: Configure
+        run: |
+          set -eu
+          {
+            cat .github/mt5000/default.config
+            for p in $PROFILES; do cat ".github/mt5000/profiles/$p.config"; done
+            # Build speed: compiler cache, and skip the toolchain debugger.
+            echo CONFIG_DEVEL=y
+            echo CONFIG_CCACHE=y
+            echo CONFIG_TOOLCHAINOPTS=y
+            echo '# CONFIG_GDB is not set'
+            if command -v go >/dev/null; then
+              echo "CONFIG_GOLANG_EXTERNAL_BOOTSTRAP_ROOT=\"$(go env GOROOT)\""
+            fi
+          } > .config
+          cp .config requested.config
+          make defconfig
+          # Every package that was asked for must have survived defconfig.
+          missing=0
+          for sym in $(grep -oE '^CONFIG_PACKAGE_[^=]+=y' requested.config); do
+            grep -qx "$sym" .config || { echo "::error::$sym dropped by defconfig"; missing=1; }
+          done
+          [ "$missing" = 0 ]
+          grep -x 'CONFIG_TARGET_mediatek_filogic_DEVICE_glinet_gl-mt5000=y' .config
+
+      - name: Package signing key
+        env:
+          APK_SIGNING_KEY: ${{ secrets.APK_SIGNING_KEY }}
+        run: |
+          if [ -n "$APK_SIGNING_KEY" ]; then
+            printf '%s\n' "$APK_SIGNING_KEY" > private-key.pem
+            chmod 600 private-key.pem
+            echo "Using the persistent package signing key."
+          else
+            echo "::notice::No APK_SIGNING_KEY secret; packages are signed with a throwaway key."
+          fi
+
+      - name: Download sources
+        run: make download -j8 || make download -j1 V=s
+
+      - name: Build
+        run: make -j$(nproc) || make -j1 V=s
+
+      - name: Verify output
+        run: |
+          set -eu
+          ls -lah "$TARGET_DIR"
+          for img in squashfs-sysupgrade.bin squashfs-factory.bin initramfs-kernel.bin; do
+            test -s "$TARGET_DIR/openwrt-mediatek-filogic-glinet_gl-mt5000-$img"
+          done
+          manifest="$TARGET_DIR/openwrt-mediatek-filogic-glinet_gl-mt5000.manifest"
+          test -s "$manifest"
+          missing=0
+          for pkg in $(grep -oE '^CONFIG_PACKAGE_[^=]+=y' requested.config | sed 's/^CONFIG_PACKAGE_//; s/=y$//'); do
+            grep -q "^$pkg " "$manifest" || { echo "::error::$pkg missing from the image"; missing=1; }
+          done
+          [ "$missing" = 0 ]
+          if grep -qx 'CONFIG_PACKAGE_kmod-amneziawg=y' .config; then
+            ko=$(find build_dir -name amneziawg.ko | head -1); test -n "$ko"
+            kver=$(sed -n 's/^LINUX_VERSION-6.18 = //p' target/linux/generic/kernel-6.18)
+            strings "$ko" | grep -q "^vermagic=6.18$kver "
+          fi
+
+      - name: Upload images
+        uses: actions/upload-artifact@v5
+        with:
+          name: gl-mt5000-firmware
+          if-no-files-found: error
+          path: |
+            ${{ env.TARGET_DIR }}/*glinet_gl-mt5000*
+            ${{ env.TARGET_DIR }}/sha256sums
+            ${{ env.TARGET_DIR }}/*.buildinfo
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v5
+        with:
+          name: gl-mt5000-packages
+          if-no-files-found: error
+          path: |
+            ${{ env.TARGET_DIR }}/packages
+            bin/packages
