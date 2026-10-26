@@ -105,7 +105,7 @@ with kernel-style whitespace formatting and no logic changes.
  	mtk_mdio_cleanup(eth);
 --- a/drivers/net/ethernet/mediatek/mtk_ppe_offload.c
 +++ b/drivers/net/ethernet/mediatek/mtk_ppe_offload.c
-@@ -167,25 +167,23 @@ mtk_flow_mangle_ipv4(const struct flow_a
+@@ -172,25 +172,23 @@ mtk_flow_mangle_ipv4(const struct flow_a
  	return 0;
  }
  
@@ -146,7 +146,7 @@ with kernel-style whitespace formatting and no logic changes.
  {
  #if IS_ENABLED(CONFIG_NET_DSA)
  	struct dsa_port *dp;
-@@ -196,12 +194,32 @@ mtk_flow_get_dsa_port(struct net_device
+@@ -201,12 +199,32 @@ mtk_flow_get_dsa_port(struct net_device
  
  	switch (dp->cpu_dp->tag_ops->proto) {
  	case DSA_TAG_PROTO_MTK:
@@ -183,7 +183,7 @@ with kernel-style whitespace formatting and no logic changes.
  		break;
  	default:
  		return -ENODEV;
-@@ -217,15 +235,16 @@ mtk_flow_get_dsa_port(struct net_device
+@@ -222,15 +240,16 @@ mtk_flow_get_dsa_port(struct net_device
  
  static int
  mtk_flow_set_output_device(struct mtk_eth *eth, struct mtk_foe_entry *foe,
@@ -203,7 +203,7 @@ with kernel-style whitespace formatting and no logic changes.
  		mtk_foe_entry_set_wdma(eth, foe, info.wdma_idx, info.queue,
  				       info.bss, info.wcid, info.amsdu);
  		if (mtk_is_netsys_v2_or_greater(eth)) {
-@@ -249,7 +268,7 @@ mtk_flow_set_output_device(struct mtk_et
+@@ -254,7 +273,7 @@ mtk_flow_set_output_device(struct mtk_et
  		goto out;
  	}
  
@@ -212,7 +212,7 @@ with kernel-style whitespace formatting and no logic changes.
  
  	if (dev == eth->netdev[0])
  		pse_port = PSE_GDM1_PORT;
-@@ -261,10 +280,28 @@ mtk_flow_set_output_device(struct mtk_et
+@@ -266,10 +285,28 @@ mtk_flow_set_output_device(struct mtk_et
  		return -EOPNOTSUPP;
  
  	if (dsa_port >= 0) {
@@ -244,7 +244,7 @@ with kernel-style whitespace formatting and no logic changes.
  	}
  
  	if (dsa_port >= 0 && dsa_port < MTK_DSA_USER_PORT_MAX) {
-@@ -520,7 +557,7 @@ mtk_flow_offload_replace(struct mtk_eth
+@@ -526,7 +563,7 @@ mtk_flow_offload_replace(struct mtk_eth
  			return err;
  	}
  
@@ -263,7 +263,7 @@ with kernel-style whitespace formatting and no logic changes.
  #include <net/ip.h>
  #include <net/inet_dscp.h>
  #include <net/netfilter/nf_tables.h>
-@@ -89,6 +90,24 @@ struct nft_forward_info {
+@@ -98,6 +99,24 @@ struct nft_forward_info {
  	enum flow_offload_xmit_type xmit_type;
  };
  
@@ -285,16 +285,17 @@ with kernel-style whitespace formatting and no logic changes.
 +	       dsa->dsa.proto == DSA_TAG_PROTO_RTL8366UB_8021Q;
 +}
 +
- static void nft_dev_path_info(const struct net_device_path_stack *stack,
- 			      struct nft_forward_info *info,
- 			      unsigned char *ha, struct nf_flowtable *flowtable)
-@@ -133,6 +152,28 @@ static void nft_dev_path_info(const stru
+ static int nft_dev_path_info(const struct net_device_path_stack *stack,
+ 			     struct nft_forward_info *info,
+ 			     unsigned char *ha, struct nf_flowtable *flowtable)
+@@ -144,7 +163,27 @@ static int nft_dev_path_info(const struct net_device_p
+ 		case DEV_PATH_BRIDGE:
  			if (is_zero_ether_addr(info->h_source))
  				memcpy(info->h_source, path->dev->dev_addr, ETH_ALEN);
- 
-+			if (nft_bridge_vlan_keep_tag(stack, i)) {
-+				int n = info->num_encaps;
 +
++			if (nft_bridge_vlan_keep_tag(stack, i)) {
++				n = info->num_encaps;
+ 
 +				/* Use the VID resolved by the bridge, including its
 +				 * PVID when routing through the bridge itself. An
 +				 * untagged destination port may have another PVID.
@@ -302,18 +303,24 @@ with kernel-style whitespace formatting and no logic changes.
 +				if (!n ||
 +				    info->encap[n - 1].id != path->bridge.vlan_id ||
 +				    info->encap[n - 1].proto != path->bridge.vlan_proto) {
-+					if (n >= NF_FLOW_TABLE_ENCAP_MAX) {
-+						info->indev = NULL;
-+						return;
-+					}
++					if (n >= NF_FLOW_TABLE_ENCAP_MAX)
++						return -1;
++
 +					info->encap[n].id = path->bridge.vlan_id;
 +					info->encap[n].proto = path->bridge.vlan_proto;
 +					info->num_encaps++;
 +				}
-+				info->xmit_type = FLOW_OFFLOAD_XMIT_DIRECT;
-+				break;
++				goto bridge_done;
 +			}
 +
  			switch (path->bridge.vlan_mode) {
  			case DEV_PATH_BR_VLAN_UNTAG_HW:
- 				info->ingress_vlans |= BIT(info->num_encaps - 1);
+ 				if (info->num_encaps == 0)
+@@ -168,6 +207,7 @@ static int nft_dev_path_info(const struct net_device_p
+ 			case DEV_PATH_BR_VLAN_KEEP:
+ 				break;
+ 			}
++bridge_done:
+ 			info->bridge_path = 1;
+ 			info->port_vlans = 0;
+ 			n = info->num_encaps;
