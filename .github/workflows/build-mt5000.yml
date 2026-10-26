@@ -153,6 +153,9 @@ jobs:
             kver=$(sed -n 's/^LINUX_VERSION-6.18 = //p' target/linux/generic/kernel-6.18)
             strings "$ko" | grep -q "^vermagic=6.18$kver "
           fi
+          case " $PROFILES " in *" amneziawg-server "*)
+            ls build_dir/target-*/root-mediatek/etc/uci-defaults/90-amneziawg-server ;;
+          esac
 
       - name: Upload images
         uses: actions/upload-artifact@v5
