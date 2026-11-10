@@ -1,9 +1,14 @@
 name: Build GL-MT5000
 
-# Builds an OpenWrt image for the GL.iNet GL-MT5000 (Brume 3) from the branch
-# the workflow is started on. The base image is the device plus LuCI; extra
-# packages come from the opt-in profiles in .github/mt5000/profiles/
-# (e.g. "amneziawg wireguard adguardhome avahi ddns-cloudflare").
+# Builds an OpenWrt image for the GL.iNet GL-MT5000 (Brume 3). With source
+# "latest" (the default) the tree is the current openwrt/openwrt main with
+# the commits of PR #24237 rebased on top; with "branch" it is the branch the
+# workflow is started on. Package feeds are always fetched at their latest
+# revision. The base image is the device plus LuCI and USB 3; extra packages
+# come from the opt-in profiles in .github/mt5000/profiles/
+# (e.g. "amneziawg wireguard adguardhome avahi usb-storage usb-tethering").
+# The versions that went into a build are in the job summary and in
+# versions.md in the firmware artifact.
 #
 # Optional repository secret APK_SIGNING_KEY: an EC prime256v1 private key in
 # PEM format. When set, every build signs packages with the same key, so
@@ -16,6 +21,12 @@ on:
         description: "Space-separated extra profiles from .github/mt5000/profiles"
         required: false
         default: ""
+      source:
+        description: "latest: current main + PR #24237; branch: this branch as pushed"
+        required: false
+        type: choice
+        options: [latest, branch]
+        default: latest
 
 jobs:
   build:
@@ -28,6 +39,30 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          # Full history without file contents, so the PR can be rebased.
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: Rebase PR #24237 onto the latest main
+        if: inputs.source != 'branch'
+        run: |
+          set -eu
+          git config user.name "mt5000 ci"
+          git config user.email "ci@localhost"
+          git remote add upstream https://github.com/openwrt/openwrt.git
+          git fetch --no-tags upstream main +refs/pull/24237/head:refs/remotes/upstream/pr24237
+          base=$(git merge-base upstream/main upstream/pr24237)
+          git checkout -B mt5000-build upstream/pr24237
+          # Commits that are already in main are dropped by the rebase.
+          if ! git rebase --onto upstream/main "$base"; then
+            git rebase --abort
+            echo "::error::PR #24237 no longer rebases onto main; run with source=branch"
+            exit 1
+          fi
+          # Keep this branch's workflow, base config and profiles.
+          git checkout "$GITHUB_SHA" -- .github
+          git log --oneline upstream/main..HEAD
 
       - name: Install build dependencies
         run: |
@@ -90,6 +125,28 @@ jobs:
             [ -x "$h" ] && "$h"
           done
           ./scripts/feeds install -a
+
+      - name: Record versions
+        run: |
+          set -eu
+          kver=$(sed -n 's/^LINUX_VERSION-6.18 = //p' target/linux/generic/kernel-6.18)
+          {
+            echo "## Sources"
+            echo "- source: ${{ inputs.source || 'latest' }}"
+            echo "- tree: \`$(git log -1 --format='%h %s (%cs)')\`"
+            if git rev-parse -q --verify upstream/main >/dev/null; then
+              echo "- openwrt main: \`$(git log -1 --format='%h %s (%cs)' upstream/main)\`"
+              echo "- PR #24237 head: \`$(git log -1 --format='%h %s (%cs)' upstream/pr24237)\`"
+            fi
+            echo "- kernel: 6.18$kver"
+            echo "## Feeds"
+            for d in feeds/*/; do
+              [ -d "$d.git" ] || continue
+              echo "- $(basename "$d"): \`$(git -C "$d" log -1 --format='%h (%cs)')\`"
+            done
+            echo "## Profiles"
+            echo "- ${PROFILES:-none}"
+          } | tee versions.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Configure
         run: |
@@ -166,6 +223,7 @@ jobs:
             ${{ env.TARGET_DIR }}/*glinet_gl-mt5000*
             ${{ env.TARGET_DIR }}/sha256sums
             ${{ env.TARGET_DIR }}/*.buildinfo
+            versions.md
 
       - name: Upload packages
         uses: actions/upload-artifact@v5
